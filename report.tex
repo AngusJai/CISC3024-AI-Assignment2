@@ -79,6 +79,7 @@ Do not reuse FasterNet from Assignment~1. Prefer a method whose training loss is
 Assignment~1 had already used FasterNet, a CVPR 2023 convolution designed for speed.
 That model is not a probabilistic classifier, so it could not be reused as the answer to this brief.
 
+\Needspace{8\baselineskip}
 The agent searched recent Bayesian deep-learning papers and kept three candidates that are actually about classification uncertainty:
 \begin{itemize}
   \item \textbf{Variational Bayesian Last Layers} (Harrison, Willes, and Snoek, ICLR 2024), a sampling-free variational posterior on the last layer.
@@ -140,7 +141,7 @@ The extra $\tfrac12\phi^{\top}\mathrm{diag}(v_k)\phi$ term is the Jensen gap: un
 The mini-batch loss I minimize is the negative of that bound, plus $(1/T)\,\mathrm{KL}(q(W)\,\|\,p(W))$, minus a $(1/T)$ inverse-Wishart-style penalty on the noise variances $\sigma_k^{2}$.
 $T$ is the number of training images.
 Feature weights $\theta$ get an ordinary Gaussian prior, implemented as AdamW weight decay.
-Here $\theta$ is the CNN, and $\varepsilon$ is the logit noise in Equation~\eqref{eq:disc}.
+Here $\theta$ denotes the CNN weights, and $\varepsilon$ is the logit noise in Equation~\eqref{eq:disc}.
 The last-layer parameters are not weight-decayed, because the KL term is already their regularizer.
 This is the paper's ``full training'' objective, not a post-hoc Laplace approximation and not Bayes-by-Backprop on every layer~\cite{blundell2015weight}.
 
@@ -226,6 +227,7 @@ The implementation instruction asked for a check before any training run:
 \small
 Write \texttt{self\_check()} and run it on a random batch before Fashion-MNIST. The loss must be finite and back-propagate. The bound must match a hand-expanded log-sum-exp. Larger features must increase logit variance. Do not treat test accuracy as a substitute for that check.
 \end{quote}
+\Needspace{10\baselineskip}
 After the first results, I sent a second instruction for the checks that were still missing:
 \begin{quote}
 \small
@@ -489,7 +491,7 @@ The KL term is alive. A moderate increase does not buy out-of-distribution detec
 
 \begin{table}[H]
 \centering
-\caption{D-VBLL KL multiplier. $1/T$ is the mean of three seeds. $10/T$ and $100/T$ are means of seeds 0 and 1.}
+\caption{D-VBLL KL multiplier. $1/T$ averages seeds 0--2. $10/T$ and $100/T$ average seeds 0 and 1.}
 \label{tab:kl}
 \begin{tabular}{lccccc}
 \toprule
@@ -545,10 +547,10 @@ G-VBLL is less confident on shirts (mean confidence $0.79$ against $0.84$ for MA
 The overlap is in the labels and the silhouette.
 
 \paragraph{Rejection under shift}
-Dropping the least confident $10\%$ helps on clean images and does not help once the input is shifted.
+Figure~\ref{fig:sel} drops the least confident $10\%$.
+That helps on clean images and does not help once the input is shifted.
 At $60^{\circ}$ rotation, accuracy among the kept $90\%$ is $0.122$--$0.123$ for all three heads, against a full-set accuracy of $0.118$.
 Under low contrast the kept slice is $0.174$ (MAP), $0.241$ (D-VBLL), and $0.119$ (G-VBLL), against full-set accuracies of $0.178$, $0.237$, and $0.123$.
-Figure~\ref{fig:sel} is that comparison.
 Confidence is a reject option when the test distribution matches training. It is not a detector for a preserved silhouette with the wrong intensity or the wrong angle.
 
 \begin{figure}[H]
