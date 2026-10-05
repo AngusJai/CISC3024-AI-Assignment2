@@ -170,7 +170,7 @@ def plot_gallery(output_dir: Path):
     labels = cache["gallery_labels"]
     probs = cache["gallery_probs"]
     n = images.shape[0]
-    fig, axes = plt.subplots(2, 6, figsize=(9.2, 3.8))
+    fig, axes = plt.subplots(2, 6, figsize=(9.2, 5.4))
     for i, ax in enumerate(axes.ravel()):
         ax.axis("off")
         if i >= n:
@@ -179,14 +179,16 @@ def plot_gallery(output_dir: Path):
         pred = int(probs[i].argmax())
         conf = float(probs[i, pred])
         ok = pred == int(labels[i])
+        color = "#1B7F3A" if ok else "#B00020"
         ax.set_title(
             f"{CLASS_NAMES[pred]} {conf:.2f}\ntrue {CLASS_NAMES[int(labels[i])]}",
-            fontsize=7,
-            color="#1B7F3A" if ok else "#B00020",
+            fontsize=8,
+            color=color,
+            pad=4,
         )
     fig.suptitle("D-VBLL confident mistakes and high-entropy cases", fontsize=11)
-    fig.tight_layout()
-    fig.savefig(output_dir / "gallery.png", dpi=160)
+    fig.subplots_adjust(hspace=0.55, wspace=0.25, top=0.88, bottom=0.04)
+    fig.savefig(output_dir / "gallery.png", dpi=200, bbox_inches="tight", pad_inches=0.12)
     plt.close(fig)
 
 

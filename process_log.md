@@ -83,6 +83,10 @@ Shirt is the weak class (about 0.77). The main confusions are shirt / T-shirt / 
 - Keeping the most confident 90% does not raise accuracy under 60 degree rotation or low contrast.
 - Temperature on MAP seed 2 is T = 1.119, ECE 0.0046. Three-seed mean ECE is 0.0054.
 
+## Report revision after feedback
+
+The report now quotes the two prompts I actually sent: the opening message that pasted the brief, and 「改動曬佢！」. `self_check()` was added by the agent under the first instruction; I did not send a separate prompt for it. Section 2 writes Bayes' rule for G-VBLL and says which term is the prior, the likelihood, and the posterior. Inference times on MPS, batch 128, seed 0: MAP 6.5 ms, D-VBLL with 32 samples 6.3 ms, G-VBLL 8.0 ms. The architecture figure is TikZ. The mistake gallery has more space between the two rows of titles.
+
 ## Report
 
 `report.tex` is compiled to `AIAssignment2_Report.pdf`. It uses the six sections required by the brief.
