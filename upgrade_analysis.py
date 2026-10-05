@@ -132,7 +132,7 @@ def plot_selective(rows):
     kinds = ["map", "vbll", "gvbll"]
     labels = {"map": "MAP", "vbll": "D-VBLL", "gvbll": "G-VBLL"}
     colors = {"map": "#4C78A8", "vbll": "#F58518", "gvbll": "#54A24B"}
-    fig, ax = plt.subplots(figsize=(6.4, 3.4))
+    fig, ax = plt.subplots(figsize=(6.4, 2.85))
     x = np.arange(len(conditions))
     width = 0.24
     for i, kind in enumerate(kinds):
@@ -170,7 +170,7 @@ def main():
     summary = {
         "map": _group([OUT / f"map_seed{s}_eval.json" for s in (0, 1, 2)]),
         "vbll": _group([OUT / f"vbll_seed{s}_eval.json" for s in (0, 1, 2)]),
-        "gvbll": _group([OUT / f"gvbll_seed{s}_eval.json" for s in (0, 1)]),
+        "gvbll": _group([OUT / f"gvbll_seed{s}_eval.json" for s in (0, 1, 2)]),
     }
 
     kl_rows = []
@@ -192,7 +192,7 @@ def main():
     mc_rows = []
     shirt_rows = []
     brier_rows = []
-    for kind, seeds in (("map", (0, 1, 2)), ("vbll", (0, 1, 2)), ("gvbll", (0, 1))):
+    for kind, seeds in (("map", (0, 1, 2)), ("vbll", (0, 1, 2)), ("gvbll", (0, 1, 2))):
         for seed in seeds:
             cache = torch.load(OUT / f"{kind}_seed{seed}_eval.tensors.pt", weights_only=False)
             probs, labels = cache["clean_probs"], cache["clean_labels"]
@@ -216,7 +216,7 @@ def main():
             print("mc", mc_rows[-1], flush=True)
 
     selective_rows = []
-    for kind, seeds in (("map", (0, 1, 2)), ("vbll", (0, 1, 2)), ("gvbll", (0, 1))):
+    for kind, seeds in (("map", (0, 1, 2)), ("vbll", (0, 1, 2)), ("gvbll", (0, 1, 2))):
         for seed in seeds:
             model, _ = load_model(OUT / f"{kind}_seed{seed}.pt", device)
             for condition in ("clean", "rotate_60", "low_contrast"):

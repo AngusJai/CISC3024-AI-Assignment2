@@ -23,6 +23,7 @@ MAIN = {
     "vbll_seed2_eval.json",
     "gvbll_seed0_eval.json",
     "gvbll_seed1_eval.json",
+    "gvbll_seed2_eval.json",
 }
 
 
@@ -67,7 +68,7 @@ def plot_curves(rows, output_dir: Path):
 def plot_reliability(rows, output_dir: Path):
     fig, ax = plt.subplots(figsize=(4.4, 4.0))
     ax.plot([0, 1], [0, 1], linestyle="--", color="0.5", linewidth=1, label="Perfect")
-    for kind in ("map", "vbll"):
+    for kind in ("map", "vbll", "gvbll"):
         chosen = next(r for r in rows if r["kind"] == kind and r["seed"] == 0)
         bins = [b for b in chosen["conditions"]["clean"]["reliability"] if b["count"]]
         ax.plot(

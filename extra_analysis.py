@@ -123,8 +123,8 @@ def main():
 
     rows = []
     curves = {}
-    for kind in ("map", "vbll"):
-        for seed in (0, 1):
+    for kind in ("map", "vbll", "gvbll"):
+        for seed in (0, 1, 2):
             cache = torch.load(out / f"{kind}_seed{seed}_eval.tensors.pt", weights_only=False)
             probs, y = cache["clean_probs"], cache["clean_labels"]
             coverage, risk, aurc, acc90 = risk_coverage(probs, y)
@@ -169,8 +169,8 @@ def main():
     (out / "extra_analysis.json").write_text(json.dumps(payload, indent=2))
 
     fig, ax = plt.subplots(figsize=(4.6, 3.6))
-    colors = {"map": "#4C78A8", "vbll": "#F58518"}
-    labels = {"map": "Softmax MAP", "vbll": "D-VBLL"}
+    colors = {"map": "#4C78A8", "vbll": "#F58518", "gvbll": "#54A24B"}
+    labels = {"map": "Softmax MAP", "vbll": "D-VBLL", "gvbll": "G-VBLL"}
     for kind, (coverage, risk) in curves.items():
         ax.plot(coverage, risk, color=colors[kind], label=labels[kind], linewidth=2)
     ax.set_xlabel("Coverage (fraction kept)")

@@ -272,9 +272,9 @@ Both datasets are normalized with the Fashion-MNIST training mean $0.286$ and st
 \paragraph{Protocol}
 The three heads share the CNN, the augmentation (horizontal flip and a random crop after 2-pixel padding), AdamW at learning rate $10^{-3}$, cosine decay, batch size 128, and 12 epochs.
 Backbone weight decay is $10^{-4}$.
-MAP and D-VBLL use seeds $\{0,1,2\}$. G-VBLL uses seeds $\{0,1\}$. All runs are on Apple MPS (PyTorch 2.14).
+MAP, D-VBLL, and G-VBLL use seeds $\{0,1,2\}$. All runs are on Apple MPS (PyTorch 2.14).
 Validation probabilities for D-VBLL use 16 logit samples; the test tables use 32.
-MAP and D-VBLL means are over three seeds. G-VBLL means are over two.
+Means for all three heads are over three seeds.
 Calibration is expected calibration error with 15 bins~\cite{guo2017calibration}.
 
 \Needspace{16\baselineskip}
@@ -304,7 +304,7 @@ A Bayesian last layer does not buy its uncertainty by spending latency, which ma
 
 \begin{table}[H]
 \centering
-\caption{Clean Fashion-MNIST test set. MAP and D-VBLL are means over three seeds; G-VBLL over two.}
+\caption{Clean Fashion-MNIST test set. Means over three seeds.}
 \label{tab:clean}
 \begin{tabular}{lcccc}
 \toprule
@@ -312,7 +312,7 @@ Model & Accuracy & NLL & ECE & Entropy \\
 \midrule
 Softmax MAP & 0.931 & 0.199 & 0.0104 & 0.167 \\
 D-VBLL ($1/T$) & 0.928 & 0.201 & 0.0074 & 0.183 \\
-G-VBLL & 0.928 & 0.206 & 0.0131 & 0.252 \\
+G-VBLL & 0.929 & 0.205 & 0.0139 & 0.250 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -334,7 +334,7 @@ Figure~\ref{fig:rel} shows that D-VBLL's reliability curve sits closer to the di
 \begin{figure}[H]
 \centering
 \safeimg[0.62\linewidth]{reliability.png}
-\caption{Reliability diagram on the clean test set, seed 0. Both models are close to the diagonal; D-VBLL is the smoother of the two.}
+\caption{Reliability diagram on the clean test set, seed 0. The three heads sit near the diagonal; D-VBLL is the smoothest of the three.}
 \label{fig:rel}
 \end{figure}
 
@@ -356,12 +356,12 @@ The CNN features carry the class.
 The softmax and D-VBLL heads are what make the probabilities sharp.
 
 Ranking is a separate question from calibration.
-Using confidence to detect the model's own mistakes, mean AUROC is $0.922$ for MAP, $0.924$ for D-VBLL, and $0.922$ for G-VBLL.
+Using confidence to detect the model's own mistakes, mean AUROC is $0.922$ for MAP, $0.924$ for D-VBLL, and $0.920$ for G-VBLL.
 Pixel naive Bayes is at chance on this ranking ($0.510$); LDA on the CNN features reaches $0.900$.
 Keeping the most confident $90\%$ of the clean test set raises accuracy to $0.968$ (MAP), $0.967$ (D-VBLL), and $0.967$ (G-VBLL).
 Figure~\ref{fig:risk} shows the risk-coverage curves lying on top of each other.
 D-VBLL does not rank errors better than softmax once the posterior has collapsed.
-Both heads are still useful as reject options: the bottom decile of confidence contains a disproportionate share of the mistakes.
+All three heads are still useful as reject options: the bottom decile of confidence contains a disproportionate share of the mistakes.
 
 \begin{table}[H]
 \centering
@@ -377,7 +377,7 @@ LDA on MAP features & 0.917 & 0.544 & 0.063 & 0.143 & 0.900 \\
 Softmax MAP & 0.931 & 0.199 & 0.0104 & 0.103 & 0.922 \\
 MAP $+$ temperature & 0.931 & 0.197 & 0.0054 & 0.103 & 0.922 \\
 D-VBLL ($1/T$) & 0.928 & 0.201 & 0.0074 & 0.105 & 0.924 \\
-G-VBLL & 0.928 & 0.206 & 0.0131 & 0.107 & 0.922 \\
+G-VBLL & 0.929 & 0.205 & 0.0139 & 0.106 & 0.920 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -386,7 +386,7 @@ G-VBLL & 0.928 & 0.206 & 0.0131 & 0.107 & 0.922 \\
 \begin{figure}[H]
 \centering
 \safeimg[0.62\linewidth]{risk_coverage.png}
-\caption{Selective risk against coverage, seed 0. Lower is better. The curves overlap: both heads become accurate once low-confidence predictions are refused.}
+\caption{Selective risk against coverage, seed 0. Lower is better. The three curves overlap: all heads become accurate once low-confidence predictions are refused.}
 \label{fig:risk}
 \end{figure}
 
@@ -420,19 +420,19 @@ Table~\ref{tab:corr} and Figure~\ref{fig:corr} are the accuracy and the entropy 
 
 \begin{table}[H]
 \centering
-\caption{Test accuracy under corruption. MAP and D-VBLL are means over three seeds; G-VBLL over two.}
+\caption{Test accuracy under corruption. Means over three seeds.}
 \label{tab:corr}
 \begin{tabular}{lccc}
 \toprule
 Condition & MAP & D-VBLL & G-VBLL \\
 \midrule
-Clean & 0.931 & 0.928 & 0.928 \\
-Gaussian noise $0.15$ & 0.423 & 0.418 & 0.412 \\
-Gaussian noise $0.30$ & 0.154 & 0.195 & 0.141 \\
-Rotate $30^{\circ}$ & 0.264 & 0.303 & 0.322 \\
-Rotate $60^{\circ}$ & 0.118 & 0.118 & 0.118 \\
-$5\times 5$ average blur & 0.397 & 0.423 & 0.466 \\
-Low contrast & 0.178 & 0.237 & 0.123 \\
+Clean & 0.931 & 0.928 & 0.929 \\
+Gaussian noise $0.15$ & 0.423 & 0.418 & 0.373 \\
+Gaussian noise $0.30$ & 0.154 & 0.195 & 0.136 \\
+Rotate $30^{\circ}$ & 0.264 & 0.303 & 0.313 \\
+Rotate $60^{\circ}$ & 0.118 & 0.118 & 0.114 \\
+$5\times 5$ average blur & 0.397 & 0.423 & 0.453 \\
+Low contrast & 0.178 & 0.237 & 0.125 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -453,7 +453,8 @@ Last-layer weight uncertainty is not a corruption detector.
 \paragraph{Out-of-distribution digits}
 Using maximum predictive probability as the in-distribution score, mean AUROC against MNIST is $0.851$ for MAP (standard deviation $0.039$ across three seeds) and $0.856$ for D-VBLL (standard deviation $0.026$).
 The third seed removes the apparent gap between those two heads.
-G-VBLL reaches $0.910$ on both of its seeds (standard deviation $0.003$).
+G-VBLL reaches $0.910$ on all three seeds (standard deviation $0.002$).
+The third seed leaves that OOD result in place; it does not leave the noise-$0.15$ accuracy in place, which falls from $0.41$ on the first two seeds to $0.29$ on seed 2.
 Figure~\ref{fig:ood} is a cumulative plot so the mass near probability 1 does not hide the rest of the distribution.
 G-VBLL's MNIST curve rises earlier: more digits receive a lower maximum probability, which is what the AUROC is measuring.
 
@@ -541,21 +542,22 @@ The published tables use 32 samples. Eight would have been enough on this datase
 
 \paragraph{Shirt versus T-shirt}
 Headline ECE near $0.01$ is an average over easy classes.
-On shirt images alone, accuracy is $0.776$ (MAP), $0.767$ (D-VBLL), and $0.760$ (G-VBLL), and the class-conditional ECE is about $0.074$, $0.075$, and $0.049$.
+On shirt images alone, accuracy is $0.776$ (MAP), $0.767$ (D-VBLL), and $0.768$ (G-VBLL), and the class-conditional ECE is about $0.074$, $0.075$, and $0.049$.
 About $10\%$ of shirts are predicted as T-shirts under every head.
 G-VBLL is less confident on shirts (mean confidence $0.79$ against $0.84$ for MAP), which is why its shirt ECE is lower, not because it names them more often.
 The overlap is in the labels and the silhouette.
 
+\Needspace{18\baselineskip}
 \paragraph{Rejection under shift}
 Figure~\ref{fig:sel} drops the least confident $10\%$.
 That helps on clean images and does not help once the input is shifted.
-At $60^{\circ}$ rotation, accuracy among the kept $90\%$ is $0.122$--$0.123$ for all three heads, against a full-set accuracy of $0.118$.
-Under low contrast the kept slice is $0.174$ (MAP), $0.241$ (D-VBLL), and $0.119$ (G-VBLL), against full-set accuracies of $0.178$, $0.237$, and $0.123$.
+At $60^{\circ}$ rotation, accuracy among the kept $90\%$ is $0.123$ (MAP), $0.122$ (D-VBLL), and $0.116$ (G-VBLL), against a full-set accuracy of about $0.118$.
+Under low contrast the kept slice is $0.174$ (MAP), $0.241$ (D-VBLL), and $0.119$ (G-VBLL), against full-set accuracies of $0.178$, $0.237$, and $0.125$.
 Confidence is a reject option when the test distribution matches training. It is not a detector for a preserved silhouette with the wrong intensity or the wrong angle.
 
 \begin{figure}[H]
 \centering
-\safeimg[0.85\linewidth]{selective_corruption.png}
+\includegraphics[width=0.92\linewidth]{selective_corruption.png}
 \caption{Accuracy after keeping the most confident $90\%$. The gain exists on clean clothes and disappears under $60^{\circ}$ rotation and low contrast.}
 \label{fig:sel}
 \end{figure}
@@ -569,7 +571,7 @@ Confidence is a reject option when the test distribution matches training. It is
   \item A Bayes classifier still needs a representation. Pixel naive Bayes scores $0.579$ because garment pixels are not independent Gaussians. LDA on the CNN features jumps to $0.917$, and the discriminative heads then cut NLL from $0.544$ to $0.200$. The modern part is the feature map; the last-layer posterior is a small adjustment on top.
   \item The generative head is the one that uses Bayes' rule, and it is the one that moves out-of-distribution detection. G-VBLL's MNIST AUROC is $0.910$ with almost no seed spread. It pays for that with a higher clean NLL and ECE than D-VBLL. LDA on the same style of model, shared covariance on frozen features, reaches accuracy $0.917$ and then loses on NLL. The formula and the representation both matter.
   \item Confidence is a reject option only on the training distribution. Dropping the least confident $10\%$ lifts clean accuracy to about $0.967$ and does nothing under $60^{\circ}$ rotation or low contrast. Shirt ECE stays near $0.07$ while the headline ECE is near $0.01$. Eight Monte Carlo samples match sixty-four on this test set.
-  \item Out-of-distribution AUROC needs more than one seed. MAP's three seeds still spread by about nine points. G-VBLL's two seeds differ by $0.003$. A single-run bar chart would have picked a winner that the next seed does not support.
+  \item Out-of-distribution AUROC needs more than one seed. MAP's three seeds still spread by about nine points. G-VBLL's three seeds differ by $0.005$. A single-run bar chart would have picked a winner that the next seed does not support.
 \end{itemize}
 
 \section{Source Code Webpage Link}
@@ -587,6 +589,7 @@ D-VBLL does not detect digit images, because the approximate posterior concentra
 G-VBLL, the generative classifier in the same paper, is the head that applies Bayes' rule to the features. Its MNIST AUROC is $0.910$ and stable across seeds, with a small cost in clean likelihood and calibration.
 Refusing the least confident tenth of the test set helps only when the images still look like the training set. Accuracy on this network stays near $0.93$.
 
+\enlargethispage{4\baselineskip}
 \begin{thebibliography}{9}
 \bibitem{harrison2024vbll}
 J.~Harrison, J.~Willes, and J.~Snoek.

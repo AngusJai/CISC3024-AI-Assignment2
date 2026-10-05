@@ -13,6 +13,7 @@ JOBS = (
     ("vbll", 2, 1.0, 1.0, "vbll_seed2.pt"),
     ("gvbll", 0, 1.0, 1.0, "gvbll_seed0.pt"),
     ("gvbll", 1, 1.0, 1.0, "gvbll_seed1.pt"),
+    ("gvbll", 2, 1.0, 1.0, "gvbll_seed2.pt"),
     ("vbll", 1, 10.0, 1.0, "vbll_seed1_reg10.pt"),
     ("vbll", 1, 100.0, 1.0, "vbll_seed1_reg100.pt"),
     ("vbll", 0, 1.0, 0.1, "vbll_seed0_prior0p1.pt"),

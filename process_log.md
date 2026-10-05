@@ -75,7 +75,7 @@ Shirt is the weak class (about 0.77). The main confusions are shirt / T-shirt / 
 `python run_upgrades.py` then `python upgrade_analysis.py`.
 
 - MAP and D-VBLL seed 2. Three-seed clean means: MAP accuracy 0.931, NLL 0.199, ECE 0.0104, MNIST AUROC 0.851. D-VBLL accuracy 0.928, NLL 0.201, ECE 0.0074, AUROC 0.856.
-- G-VBLL seeds 0 and 1. Accuracy 0.928, NLL 0.206, ECE 0.0131, entropy 0.252, MNIST AUROC 0.910 (standard deviation 0.003).
+- G-VBLL seed 2. Three-seed means: accuracy 0.929, NLL 0.205, ECE 0.0139, entropy 0.250, MNIST AUROC 0.910 (standard deviation 0.002). Seed 2 keeps the OOD result and drops noise-0.15 accuracy to 0.294.
 - D-VBLL KL weights 10/T and 100/T, seed 1, combined with the earlier seed-0 ablation. Mean AUROC is 0.844 at 10/T and 0.913 at 100/T. The seed-0-only rise at 10/T did not repeat.
 - Prior scales 0.1 and 10, D-VBLL seed 0. Posterior variance stays between 2.5e-4 and 5.4e-4. AUROC falls as the prior widens (0.883, 0.825, 0.791).
 - Monte Carlo sizes 8, 32, and 64 agree to about 0.001 on accuracy and NLL.

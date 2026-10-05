@@ -33,14 +33,14 @@ python demo.py --ckpt outputs/vbll_seed0.pt
 
 ## Main result
 
-MAP and D-VBLL are means over seeds 0--2. G-VBLL is the mean of seeds 0 and 1. Temperature is fit on the validation set of each MAP seed.
+MAP, D-VBLL, and G-VBLL are means over seeds 0--2. Temperature is fit on the validation set of each MAP seed.
 
 | Model | Clean acc. | NLL | ECE | MNIST AUROC |
 |-------|----------:|----:|----:|------------:|
 | Softmax MAP | 0.931 | 0.199 | 0.0104 | 0.851 |
 | MAP + validation temperature | 0.931 | 0.197 | 0.0054 | — |
 | D-VBLL, KL weight 1/T | 0.928 | 0.201 | 0.0074 | 0.856 |
-| G-VBLL | 0.928 | 0.206 | 0.0131 | 0.910 |
+| G-VBLL | 0.929 | 0.205 | 0.0139 | 0.910 |
 
 Pixel Gaussian naive Bayes reaches accuracy 0.579. Shrinkage LDA on the MAP features reaches 0.917 accuracy but NLL 0.544. `extra_analysis.py` reproduces the controls.
 
