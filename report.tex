@@ -220,7 +220,7 @@ The instruction in Section~1 was the input.
 The agent returned a model, a training script, and \texttt{self\_check()}, then ran that check on an $8\times 4$ random batch before any Fashion-MNIST epoch.
 When the check disagreed with a hand-expanded log-sum-exp, the agent edited the loss and ran the check again.
 Later, G-VBLL evaluation crashed because that head has no \texttt{forward}; the agent changed evaluation to call \texttt{predictive}.
-Figures and this report were generated from the saved metrics after those runs.
+Those runs then produced the figures and this report.
 I did not type the Python in between.
 The implementation instruction asked for a check before any training run:
 \begin{quote}
@@ -445,8 +445,8 @@ Low contrast & 0.178 & 0.237 & 0.125 \\
 \end{figure}
 
 Geometric and photometric shift hurts all three heads.
-At noise $0.30$, rotation $60^{\circ}$, and low contrast, accuracy falls to roughly $0.12$--$0.23$.
-Low contrast is the instructive case: accuracy is about $0.19$--$0.23$, but mean entropy stays near $0.33$, lower than under noise, and ECE exceeds $0.65$.
+At noise $0.30$, rotation $60^{\circ}$, and low contrast, accuracy falls to roughly $0.12$--$0.24$.
+Low contrast is the instructive case: accuracy is $0.125$ for G-VBLL, $0.178$ for MAP, and $0.237$ for D-VBLL, but mean entropy stays between $0.29$ and $0.42$, lower than under noise, and ECE exceeds $0.65$.
 All three heads are confidently wrong when the silhouette is preserved and the intensity is flattened.
 Last-layer weight uncertainty is not a corruption detector.
 
@@ -569,7 +569,7 @@ Confidence is a reject option when the test distribution matches training. It is
   \item Matching accuracy is a real result, and it is not the whole probability question. D-VBLL at $1/T$ ties MAP on accuracy, NLL, Brier score, and error ranking. The ECE edge over unscaled softmax disappears once the softmax has a validation temperature. I should not describe D-VBLL as a better calibrated classifier than temperature scaling.
   \item Posterior variance can collapse, and widening the prior does not undo it. The prior said $0.016$ at the default scale; training at $1/T$ kept the posterior variance below $6\times 10^{-4}$ even when that prior was widened or narrowed by a factor of ten. A second seed also removed a false OOD win for the $10/T$ KL weight. Only $100/T$ raises MNIST AUROC, and it does so by making clean probabilities less sharp.
   \item A Bayes classifier still needs a representation. Pixel naive Bayes scores $0.579$ because garment pixels are not independent Gaussians. LDA on the CNN features jumps to $0.917$, and the discriminative heads then cut NLL from $0.544$ to $0.200$. The modern part is the feature map; the last-layer posterior is a small adjustment on top.
-  \item The generative head is the one that uses Bayes' rule, and it is the one that moves out-of-distribution detection. G-VBLL's MNIST AUROC is $0.910$ with almost no seed spread. It pays for that with a higher clean NLL and ECE than D-VBLL. LDA on the same style of model, shared covariance on frozen features, reaches accuracy $0.917$ and then loses on NLL. The formula and the representation both matter.
+  \item The generative head applies Bayes' rule, and it is the one that moves out-of-distribution detection. G-VBLL's MNIST AUROC is $0.910$ with almost no seed spread. It pays for that with a higher clean NLL and ECE than D-VBLL.
   \item Confidence is a reject option only on the training distribution. Dropping the least confident $10\%$ lifts clean accuracy to about $0.967$ and does nothing under $60^{\circ}$ rotation or low contrast. Shirt ECE stays near $0.07$ while the headline ECE is near $0.01$. Eight Monte Carlo samples match sixty-four on this test set.
   \item Out-of-distribution AUROC needs more than one seed. MAP's three seeds still spread by about nine points. G-VBLL's three seeds differ by $0.005$. A single-run bar chart would have picked a winner that the next seed does not support.
 \end{itemize}
