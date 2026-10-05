@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.pyc
+data/
+outputs/*.tensors.pt
+.DS_Store
+*.aux
+*.log
+*.out
+*.toc
+*.fls
+*.synctex.gz
