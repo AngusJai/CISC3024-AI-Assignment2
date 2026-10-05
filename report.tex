@@ -101,7 +101,7 @@ The diary of prompts, rejected alternatives, and checks is \texttt{process\_log.
 
 \section{Algorithm Description}
 \label{sec:algo}
-\paragraph{Model.}
+\paragraph{Model}
 A network with weights $\theta$ maps an image $x$ to a feature vector $\phi(x,\theta)\in\mathbb{R}^{D}$.
 Class logits are a noisy linear readout. For a last-layer matrix $W$ whose $k$-th row is $w_k$,
 \begin{equation}
@@ -116,7 +116,7 @@ Exact softmax marginalization is intractable, so training uses a variational pos
 $q(w_k)=\mathcal{N}(m_k,\mathrm{diag}(v_k))$.
 Diagonal covariances drop cross-class correlation and make every loss term linear in $D$.
 
-\paragraph{Training bound.}
+\paragraph{Training bound}
 Stochastic variational inference~\cite{hoffman2013svi} maximizes a lower bound on the log marginal likelihood.
 For one example with label $y$, Theorem~2 replaces the expected log-softmax by
 \begin{equation}
@@ -132,7 +132,7 @@ Feature weights $\theta$ get an ordinary Gaussian prior, implemented as AdamW we
 The last-layer parameters are not weight-decayed, because the KL term is already their regularizer.
 This is the paper's ``full training'' objective, not a post-hoc Laplace approximation and not Bayes-by-Backprop on every layer~\cite{blundell2015weight}.
 
-\paragraph{Prediction.}
+\paragraph{Prediction}
 The posterior predictive probability is the expectation of the softmax under $q(W)$.
 That expectation has no closed form for the discriminative model, so I draw logit samples
 \begin{equation}
@@ -143,7 +143,7 @@ and average $\mathrm{softmax}(z^{(s)})$.
 Test metrics use 32 samples.
 Out-of-distribution scores use the maximum predictive probability~\cite{hendrycks2017baseline}.
 
-\paragraph{What is Bayesian here.}
+\paragraph{What is Bayesian here}
 Write the four objects separately, because a pattern-recognition classifier is the posterior predictive, not the training loss.
 The prior is $p(W)=\prod_k\mathcal{N}(w_k;0,s^{2}I)$.
 The likelihood is the softmax in Equation~\eqref{eq:disc}.
@@ -191,14 +191,14 @@ The KL is scaled by $1/T$ in the main runs.
 I did not import the \texttt{vbll} library; the module is a direct implementation of the bound above so the loss can be read against Equation~\eqref{eq:bound}.
 
 \section{Experiment Settings and Results}
-\paragraph{Task.}
+\paragraph{Task}
 In-distribution data are Fashion-MNIST clothing images, $28\times 28$ greyscale, 10 classes~\cite{xiao2017fashion}.
 The official training set is split once, with seed 0, into 54{,}000 training images and 6{,}000 validation images.
 The 10{,}000 official test images are used only for the tables below.
 MNIST digits are a far out-of-distribution set~\cite{lecun1998gradient}: same resolution, different pattern family.
 Both datasets are normalized with the Fashion-MNIST training mean $0.286$ and standard deviation $0.353$.
 
-\paragraph{Protocol.}
+\paragraph{Protocol}
 Both models share the CNN, the augmentation (horizontal flip and a random crop after 2-pixel padding), AdamW at learning rate $10^{-3}$, cosine decay, batch size 128, and 12 epochs.
 Backbone weight decay is $10^{-4}$.
 Runs use two seeds, $\{0,1\}$, on Apple MPS (PyTorch 2.14).
@@ -240,7 +240,7 @@ Figure~\ref{fig:rel} shows that D-VBLL's reliability curve sits closer to the di
 \label{fig:rel}
 \end{figure}
 
-\paragraph{Controls a probability model still has to pass.}
+\paragraph{Controls a probability model still has to pass}
 A lower ECE than softmax is not, by itself, evidence that the posterior did the work.
 Three controls use the same test set and do not change the trained CNN.
 
@@ -289,7 +289,7 @@ D-VBLL ($1/T$) & 0.928 & 0.200 & 0.0075 & 0.924 \\
 \label{fig:risk}
 \end{figure}
 
-\paragraph{Where the errors are.}
+\paragraph{Where the errors are}
 Seed-0 D-VBLL per-class accuracy is high on bags ($0.989$), trousers ($0.987$), and sandals ($0.978$), and lowest on shirts ($0.769$).
 The largest off-diagonal counts are shirt$\to$T-shirt (96), T-shirt$\to$shirt (79), shirt$\to$coat (70), and coat$\to$shirt (41).
 Those pairs share a torso silhouette.
@@ -311,7 +311,7 @@ Figure~\ref{fig:gallery} shows the failure mode the ECE number hides: a few erro
 \label{fig:gallery}
 \end{figure}
 
-\paragraph{Corruptions.}
+\paragraph{Corruptions}
 Corruptions are applied in pixel space at test time only.
 The models were not trained on them.
 Table~\ref{tab:corr} and Figure~\ref{fig:corr} show that geometric and photometric shift hurts both heads.
@@ -346,7 +346,7 @@ Low contrast & 0.193 & 0.235 \\
 \label{fig:corr}
 \end{figure}
 
-\paragraph{Out-of-distribution digits.}
+\paragraph{Out-of-distribution digits}
 Using maximum predictive probability as the in-distribution score, AUROC against MNIST is $0.902$ and $0.808$ for the two MAP seeds (mean $0.855$), and $0.825$ and $0.855$ for D-VBLL (mean $0.840$).
 The seed spread is larger than the gap between models, so I do not claim an OOD win for either head.
 Figure~\ref{fig:ood} shows why the AUROC is only moderate: most clothes sit near probability 1, and a visible slice of digits does too.
@@ -358,7 +358,7 @@ Figure~\ref{fig:ood} shows why the AUROC is only moderate: most clothes sit near
 \label{fig:ood}
 \end{figure}
 
-\paragraph{Why the Bayesian head stays close to MAP.}
+\paragraph{Why the Bayesian head stays close to MAP}
 After training at KL weight $1/T$, the mean diagonal variance of $W$ is about $4.9\times 10^{-4}$.
 The prior variance is $2/D=0.0156$, roughly thirty times larger, so the posterior has concentrated.
 The KL itself is about $2.3\times 10^{3}$; divided by $T=54000$ it contributes only a few hundredths to the loss, which is enough to regularize but not enough to keep the prior's uncertainty.
@@ -373,7 +373,7 @@ This is the opposite of a distance-aware uncertainty method, and it matches the 
 \label{fig:norm}
 \end{figure}
 
-\paragraph{KL-weight ablation (seed 0).}
+\paragraph{KL-weight ablation (seed 0)}
 The $1/T$ factor is a hyperparameter of the ELBO estimator, not a constant of nature.
 I retrained D-VBLL at $10/T$ and $100/T$ with the same seed and schedule.
 Table~\ref{tab:kl} shows the trade.
