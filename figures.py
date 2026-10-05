@@ -127,23 +127,6 @@ def plot_corruptions(rows, output_dir: Path):
     plt.close(fig)
 
 
-def plot_ood(output_dir: Path):
-    fig, axes = plt.subplots(1, 2, figsize=(8.2, 3.3), sharey=True)
-    for ax, kind in zip(axes, ("map", "vbll")):
-        cache = torch.load(output_dir / f"{kind}_seed0_eval.tensors.pt", weights_only=False)
-        ax.hist(cache["id_maxprob"].numpy(), bins=30, density=True, alpha=0.75, label="Fashion-MNIST", color="#54A24B")
-        ax.hist(cache["ood_maxprob"].numpy(), bins=30, density=True, alpha=0.65, label="MNIST (OOD)", color="#E45756")
-        ax.set_title(LABELS[kind])
-        ax.set_xlabel("Max predictive probability")
-        ax.set_xlim(0, 1)
-        ax.grid(alpha=0.3)
-    axes[0].set_ylabel("Density")
-    axes[0].legend(frameon=False, fontsize=8)
-    fig.tight_layout()
-    fig.savefig(output_dir / "ood_hist.png", dpi=160)
-    plt.close(fig)
-
-
 def plot_confusion(output_dir: Path):
     cache = torch.load(output_dir / "vbll_seed0_eval.tensors.pt", weights_only=False)
     pred = cache["clean_probs"].argmax(dim=-1)
@@ -215,33 +198,11 @@ def plot_norm_entropy(rows, output_dir: Path):
     plt.close(fig)
 
 
-def write_summary(rows, output_dir: Path):
-    summary = {"models": {}}
-    for kind in ("map", "vbll"):
-        block = {}
-        for name in CORRUPTIONS:
-            for key in ("accuracy", "nll", "ece", "entropy"):
-                mean, std = _mean_std(rows, kind, lambda r, name=name, key=key: r["conditions"][name][key])
-                block[f"{name}_{key}"] = {"mean": mean, "std": std}
-        for key in ("auroc_maxprob", "fashion_maxprob", "mnist_maxprob", "mnist_entropy"):
-            mean, std = _mean_std(rows, kind, lambda r, key=key: r["ood"][key])
-            block[key] = {"mean": mean, "std": std}
-        stats = [r["head_stats"] for r in rows if r["kind"] == kind and r["head_stats"]]
-        if stats:
-            block["head_stats"] = stats
-        summary["models"][kind] = block
-    (output_dir / "summary.json").write_text(json.dumps(summary, indent=2))
-    return summary
-
-
 def make_all(output_dir: Path):
     rows = _load_results(output_dir)
     plot_curves(rows, output_dir)
     plot_reliability(rows, output_dir)
     plot_corruptions(rows, output_dir)
-    plot_ood(output_dir)
     plot_confusion(output_dir)
     plot_gallery(output_dir)
     plot_norm_entropy(rows, output_dir)
-    summary = write_summary(rows, output_dir)
-    print(json.dumps(summary, indent=2))
