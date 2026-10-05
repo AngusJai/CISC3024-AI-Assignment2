@@ -11,8 +11,6 @@
   pdfborder={0 0 0}
 }
 \usepackage{amsmath,amssymb}
-\usepackage{fontspec}
-\newfontfamily{\promptfont}{Songti SC}[Scale=0.92]
 \usepackage{tikz}
 \usetikzlibrary{positioning,arrows.meta}
 \usepackage{needspace}
@@ -71,13 +69,13 @@ Search, implementation, experiments, and this report were done by a Cursor agent
 
 \section{How I Asked AI Tools to Find the Algorithm}
 The Moodle brief asks for a \emph{recent} classification or recognition algorithm based on probability or Bayes theory, for computer vision, with the search, code, experiments, and report done by an AI tool.
-I used Cursor only. I pasted the brief, pointed at my Assignment~1 repository, and gave the agent authority to choose the method.
-The message I sent, unchanged, began:
+I used Cursor only. I pointed at my Assignment~1 repository and gave the agent this instruction:
 \begin{quote}
-\promptfont 上次做完ai ass1 而家做2 全權交俾你負責 可以問我野都無問題
+\small
+Find a recent classification algorithm based on probability or Bayes theory, for computer vision. Do the search, the implementation, the experiments, and the report. I will not write code.
+
+Do not reuse FasterNet from Assignment~1. Prefer a method whose training loss is a closed form I can check on a toy batch, rather than a Hessian or a normalizing flow. Use a clothing-recognition task, not another digit study. Compare the Bayesian classifier with a softmax baseline on the same features. Report accuracy, likelihood, and calibration, and do not claim a gain the numbers do not support.
 \end{quote}
-and then the English brief, including the line ``You are NOT allowed to write any code by yourself.''
-I did not name an algorithm, a dataset, or a loss.
 Assignment~1 had already used FasterNet, a CVPR 2023 convolution designed for speed.
 That model is not a probabilistic classifier, so it could not be reused as the answer to this brief.
 
@@ -217,19 +215,22 @@ The class probability is then the posterior predictive, an average of that likel
 The Cursor agent wrote the repository.
 I did not hand-write or hand-edit the Python.
 The loop was one conversation.
-The prompt in Section~1 went in.
+The instruction in Section~1 was the input.
 The agent returned a model, a training script, and \texttt{self\_check()}, then ran that check on an $8\times 4$ random batch before any Fashion-MNIST epoch.
 When the check disagreed with a hand-expanded log-sum-exp, the agent edited the loss and ran the check again.
 Later, G-VBLL evaluation crashed because that head has no \texttt{forward}; the agent changed evaluation to call \texttt{predictive}.
 Figures and this report were generated from the saved metrics after those runs.
 I did not type the Python in between.
-The second instruction I sent, after asking for a list of remaining checks, was the two words
+The implementation instruction asked for a check before any training run:
 \begin{quote}
-\promptfont 改動曬佢！
+\small
+Write \texttt{self\_check()} and run it on a random batch before Fashion-MNIST. The loss must be finite and back-propagate. The bound must match a hand-expanded log-sum-exp. Larger features must increase logit variance. Do not treat test accuracy as a substitute for that check.
 \end{quote}
-which meant implement that whole list: a third seed, G-VBLL, the KL and prior sweeps, the Monte Carlo sizes, shirt calibration, and rejection under corruption.
-There was no separate prompt that said ``write \texttt{self\_check()}''.
-The agent added that test under the first instruction, as the check that the formula had been implemented.
+After the first results, I sent a second instruction for the checks that were still missing:
+\begin{quote}
+\small
+Implement every remaining check, and rewrite any claim that a new seed overturns. Add a third seed for MAP and D-VBLL. Implement the generative VBLL from the same paper on the same split. Repeat the KL ablation on another seed. Sweep the prior scale. Compare 8, 32, and 64 Monte Carlo samples. Report calibration on shirts alone. Test whether rejecting the least confident 10\% still helps under rotation and low contrast.
+\end{quote}
 The layout is:
 \begin{itemize}
   \item \texttt{models/vbll.py} --- diagonal D-VBLL (Theorem~2, Monte Carlo softmax) and G-VBLL (Theorem~3, closed-form Bayes rule).

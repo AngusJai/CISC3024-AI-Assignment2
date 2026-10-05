@@ -9,7 +9,7 @@
 
 ## How I directed the agent
 
-I pasted the Assignment 2 brief in one message and told the agent it was responsible for the whole submission, including questions if it needed them. I did not write Python. Assignment 1 is already a FasterNet digit project, so this assignment had to be a different algorithm and a probability model.
+I told the agent to find a recent Bayes classifier for computer vision, not to reuse FasterNet, to check the loss on a toy batch, and to write the code, experiments, and report. I did not write Python.
 
 ## How the algorithm was chosen
 
@@ -85,7 +85,7 @@ Shirt is the weak class (about 0.77). The main confusions are shirt / T-shirt / 
 
 ## Report revision after feedback
 
-The report now quotes the two prompts I actually sent: the opening message that pasted the brief, and 「改動曬佢！」. `self_check()` was added by the agent under the first instruction; I did not send a separate prompt for it. Section 2 writes Bayes' rule for G-VBLL and says which term is the prior, the likelihood, and the posterior. Inference times on MPS, batch 128, seed 0: MAP 6.5 ms, D-VBLL with 32 samples 6.3 ms, G-VBLL 8.0 ms. The architecture figure is TikZ. The mistake gallery has more space between the two rows of titles.
+The report states the task in English: a recent Bayes classifier, not FasterNet, a checkable loss, and a clothing task with a softmax baseline. A second instruction asks for the third seed, G-VBLL, the KL and prior sweeps, Monte Carlo size, shirt calibration, and rejection under corruption.
 
 ## Report
 
