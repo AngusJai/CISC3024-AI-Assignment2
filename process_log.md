@@ -70,6 +70,19 @@ Shirt is the weak class (about 0.77). The main confusions are shirt / T-shirt / 
 - Shrinkage LDA on seed-0 MAP features: accuracy $0.917$, NLL $0.544$, ECE $0.063$.
 - Misclassification AUROC about $0.923$ for both heads. Accuracy at $90\%$ coverage about $0.968$ (MAP) and $0.967$ (D-VBLL). Risk-coverage curves overlap.
 
+## Further runs
+
+`python run_upgrades.py` then `python upgrade_analysis.py`.
+
+- MAP and D-VBLL seed 2. Three-seed clean means: MAP accuracy 0.931, NLL 0.199, ECE 0.0104, MNIST AUROC 0.851. D-VBLL accuracy 0.928, NLL 0.201, ECE 0.0074, AUROC 0.856.
+- G-VBLL seeds 0 and 1. Accuracy 0.928, NLL 0.206, ECE 0.0131, entropy 0.252, MNIST AUROC 0.910 (standard deviation 0.003).
+- D-VBLL KL weights 10/T and 100/T, seed 1, combined with the earlier seed-0 ablation. Mean AUROC is 0.844 at 10/T and 0.913 at 100/T. The seed-0-only rise at 10/T did not repeat.
+- Prior scales 0.1 and 10, D-VBLL seed 0. Posterior variance stays between 2.5e-4 and 5.4e-4. AUROC falls as the prior widens (0.883, 0.825, 0.791).
+- Monte Carlo sizes 8, 32, and 64 agree to about 0.001 on accuracy and NLL.
+- Shirt-only ECE is about 0.07 for MAP and D-VBLL and 0.049 for G-VBLL. About 10% of shirts are called T-shirts.
+- Keeping the most confident 90% does not raise accuracy under 60 degree rotation or low contrast.
+- Temperature on MAP seed 2 is T = 1.119, ECE 0.0046. Three-seed mean ECE is 0.0054.
+
 ## Report
 
 `report.tex` is compiled to `AIAssignment2_Report.pdf`. It uses the six sections required by the brief.

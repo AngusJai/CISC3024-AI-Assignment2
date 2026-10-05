@@ -110,6 +110,94 @@ class DiscVBLL(nn.Module):
             }
 
 
+class GenVBLL(nn.Module):
+    """Diagonal generative VBLL.
+
+    Each class has a Gaussian feature mean with a variational posterior.
+    The predictive class probability is Bayes' rule under those Gaussians
+    and a uniform class prior, which is exact on a balanced training set.
+    Theorem 3 is the sampling-free training bound. Covariances are diagonal.
+    """
+
+    def __init__(
+        self,
+        in_features: int,
+        out_features: int,
+        regularization_weight: float,
+        prior_scale: float = 1.0,
+        wishart_scale: float = 1.0,
+        dof: float = 1.0,
+    ):
+        super().__init__()
+        self.in_features = in_features
+        self.out_features = out_features
+        self.regularization_weight = float(regularization_weight)
+        self.prior_var = float(prior_scale)
+        self.wishart_scale = float(wishart_scale)
+        self.wishart_dof = (float(dof) + in_features + 1.0) / 2.0
+
+        self.mu_mean = nn.Parameter(0.1 * torch.randn(out_features, in_features))
+        self.mu_logstd = nn.Parameter(torch.zeros(out_features, in_features))
+        self.noise_logstd = nn.Parameter(torch.zeros(in_features))
+
+    def class_variance(self) -> torch.Tensor:
+        return torch.exp(2.0 * self.mu_logstd)
+
+    def noise_variance(self) -> torch.Tensor:
+        return torch.exp(2.0 * self.noise_logstd)
+
+    def _log_normal(self, features: torch.Tensor, mean: torch.Tensor, var: torch.Tensor) -> torch.Tensor:
+        """Diagonal Gaussian log density. features [B, D], mean/var [C, D] -> [B, C]."""
+        diff = features.unsqueeze(1) - mean.unsqueeze(0)
+        log_two_pi = math.log(2.0 * math.pi)
+        return -0.5 * ((diff.square() / var) + var.log() + log_two_pi).sum(dim=-1)
+
+    def logits(self, features: torch.Tensor) -> torch.Tensor:
+        """log p(features | class) after integrating the class-mean posterior."""
+        var = self.noise_variance().unsqueeze(0) + self.class_variance()
+        return self._log_normal(features, self.mu_mean, var)
+
+    def expected_loglik(self, features: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
+        noise = self.noise_variance()
+        chosen = self.mu_mean[y]
+        chosen_var = noise.unsqueeze(0).expand_as(chosen)
+        log_two_pi = math.log(2.0 * math.pi)
+        log_like = -0.5 * (
+            ((features - chosen).square() / chosen_var) + chosen_var.log() + log_two_pi
+        ).sum(dim=-1)
+        trace = 0.5 * (self.class_variance()[y] / noise).sum(dim=-1)
+        lse = torch.logsumexp(self.logits(features), dim=-1)
+        return log_like - trace - lse
+
+    def kl_weight(self) -> torch.Tensor:
+        return diagonal_gaussian_kl(self.mu_mean, self.class_variance(), self.prior_var)
+
+    def wishart_penalty(self) -> torch.Tensor:
+        var = self.noise_variance()
+        logdet_precision = -var.log().sum()
+        trace_precision = (1.0 / var).sum()
+        return self.wishart_dof * logdet_precision - 0.5 * self.wishart_scale * trace_precision
+
+    def loss(self, features: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
+        elbo = self.expected_loglik(features, y).mean()
+        elbo = elbo + self.regularization_weight * (self.wishart_penalty() - self.kl_weight())
+        return -elbo
+
+    def predictive(self, features: torch.Tensor, n_samples: int = 32) -> torch.Tensor:
+        """Closed-form class probabilities. n_samples is unused."""
+        del n_samples
+        probs = torch.softmax(self.logits(features), dim=-1).clamp_min(1e-8)
+        return probs / probs.sum(dim=-1, keepdim=True)
+
+    def stats(self) -> dict:
+        with torch.no_grad():
+            return {
+                "mean_weight_var": float(self.class_variance().mean()),
+                "mean_noise_var": float(self.noise_variance().mean()),
+                "kl": float(self.kl_weight()),
+            }
+
+
 def self_check() -> None:
     torch.manual_seed(0)
     layer = DiscVBLL(4, 3, regularization_weight=1.0 / 100.0)
@@ -129,7 +217,19 @@ def self_check() -> None:
         probs = layer.predictive(features, n_samples=16)
         assert probs.shape == (8, 3)
         assert torch.allclose(probs.sum(dim=-1), torch.ones(8), atol=1e-5)
-    print(f"vbll self-check ok  loss={float(loss.detach()):.4f}")
+
+    generative = GenVBLL(4, 3, regularization_weight=1.0 / 100.0)
+    gloss = generative.loss(features, labels)
+    gloss.backward()
+    assert torch.isfinite(gloss)
+    with torch.no_grad():
+        gprobs = generative.predictive(features)
+        assert gprobs.shape == (8, 3)
+        assert torch.allclose(gprobs.sum(dim=-1), torch.ones(8), atol=1e-5)
+        near = generative.logits(features)
+        far = generative.logits(features + 3)
+        assert float(far.max()) < float(near.max())
+    print(f"vbll self-check ok  disc={float(loss.detach()):.4f} gen={float(gloss.detach()):.4f}")
 
 
 if __name__ == "__main__":

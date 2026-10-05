@@ -19,6 +19,7 @@ def load_model(ckpt_path: Path, device):
         n_train=payload["n_train"],
         feat_dim=payload["feat_dim"],
         reg_scale=payload.get("reg_scale", 1.0),
+        prior_scale=payload.get("prior_scale", 1.0),
     )
     model.load_state_dict(payload["state_dict"])
     model.to(device)
@@ -35,10 +36,10 @@ def collect(model, images, labels, device, n_samples, corruption="clean", seed=0
         viewed = corrupt(batch, corruption, seed=seed + start)
         x = normalize(viewed.to(device))
         features = model.features(x)
-        if model.kind == "vbll":
-            p = model.head.predictive(features, n_samples=n_samples)
-        else:
+        if model.kind == "map":
             p = torch.softmax(model.head(features), dim=-1)
+        else:
+            p = model.head.predictive(features, n_samples=n_samples)
         probs.append(p.cpu())
         ys.append(y)
         feats.append(features.cpu())

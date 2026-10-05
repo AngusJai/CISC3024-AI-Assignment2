@@ -60,12 +60,17 @@ def train_one(
     feat_dim: int = 128,
     n_samples: int = 16,
     reg_scale: float = 1.0,
+    prior_scale: float = 1.0,
 ):
     set_seed(seed)
     device = get_device()
     x_train, y_train, x_val, y_val = train_val_split(images, labels)
     model = ImageClassifier(
-        kind, n_train=x_train.shape[0], feat_dim=feat_dim, reg_scale=reg_scale
+        kind,
+        n_train=x_train.shape[0],
+        feat_dim=feat_dim,
+        reg_scale=reg_scale,
+        prior_scale=prior_scale,
     ).to(device)
     optimizer = torch.optim.AdamW(model.optimizer_groups(weight_decay), lr=lr)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
@@ -112,9 +117,10 @@ def train_one(
         "n_train": int(x_train.shape[0]),
         "epochs": epochs,
         "reg_scale": reg_scale,
+        "prior_scale": prior_scale,
         "state_dict": model.state_dict(),
         "history": history,
-        "head_stats": model.head.stats() if kind == "vbll" else {},
+        "head_stats": {} if kind == "map" else model.head.stats(),
     }
     torch.save(payload, out_path)
     history_path = out_path.with_suffix(".history.json")

@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from models.backbone import SmallCNN
-from models.vbll import DiscVBLL
+from models.vbll import DiscVBLL, GenVBLL
 
 
 class ImageClassifier(nn.Module):
@@ -16,19 +16,30 @@ class ImageClassifier(nn.Module):
         feat_dim: int = 128,
         n_classes: int = 10,
         reg_scale: float = 1.0,
+        prior_scale: float = 1.0,
     ):
         super().__init__()
-        if kind not in {"map", "vbll"}:
+        if kind not in {"map", "vbll", "gvbll"}:
             raise ValueError(f"unknown kind {kind}")
         self.kind = kind
         self.n_classes = n_classes
         self.reg_scale = float(reg_scale)
+        self.prior_scale = float(prior_scale)
         self.backbone = SmallCNN(in_channels=1, feat_dim=feat_dim)
+        weight = self.reg_scale / float(n_train)
         if kind == "vbll":
             self.head = DiscVBLL(
                 feat_dim,
                 n_classes,
-                regularization_weight=self.reg_scale / float(n_train),
+                regularization_weight=weight,
+                prior_scale=self.prior_scale,
+            )
+        elif kind == "gvbll":
+            self.head = GenVBLL(
+                feat_dim,
+                n_classes,
+                regularization_weight=weight,
+                prior_scale=self.prior_scale,
             )
         else:
             self.head = nn.Linear(feat_dim, n_classes)
@@ -44,14 +55,19 @@ class ImageClassifier(nn.Module):
             with torch.no_grad():
                 pred = self.head.logit_moments(feats)[0].argmax(dim=-1)
             return loss, pred
+        if self.kind == "gvbll":
+            loss = self.head.loss(feats, labels)
+            with torch.no_grad():
+                pred = self.head.logits(feats).argmax(dim=-1)
+            return loss, pred
         logits = self.head(feats)
         return F.cross_entropy(logits, labels), logits.argmax(dim=-1)
 
     def probabilities(self, images: torch.Tensor, n_samples: int = 32) -> torch.Tensor:
         feats = self.features(images)
-        if self.kind == "vbll":
-            return self.head.predictive(feats, n_samples=n_samples)
-        return torch.softmax(self.head(feats), dim=-1)
+        if self.kind == "map":
+            return torch.softmax(self.head(feats), dim=-1)
+        return self.head.predictive(feats, n_samples=n_samples)
 
     def optimizer_groups(self, weight_decay: float):
         if self.kind == "map":

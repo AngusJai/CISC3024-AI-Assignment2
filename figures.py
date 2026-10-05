@@ -12,13 +12,25 @@ import torch
 
 from data_utils import CLASS_NAMES, CORRUPTIONS
 
-COLORS = {"map": "#4C78A8", "vbll": "#F58518"}
-LABELS = {"map": "Softmax MAP", "vbll": "D-VBLL"}
+COLORS = {"map": "#4C78A8", "vbll": "#F58518", "gvbll": "#54A24B"}
+LABELS = {"map": "MAP", "vbll": "D-VBLL", "gvbll": "G-VBLL"}
+MAIN = {
+    "map_seed0_eval.json",
+    "map_seed1_eval.json",
+    "map_seed2_eval.json",
+    "vbll_seed0_eval.json",
+    "vbll_seed1_eval.json",
+    "vbll_seed2_eval.json",
+    "gvbll_seed0_eval.json",
+    "gvbll_seed1_eval.json",
+}
 
 
 def _load_results(output_dir: Path):
     rows = []
     for path in sorted(output_dir.glob("*_eval.json")):
+        if path.name not in MAIN:
+            continue
         rows.append(json.loads(path.read_text()))
     return rows
 
@@ -80,13 +92,13 @@ def plot_reliability(rows, output_dir: Path):
 def plot_corruptions(rows, output_dir: Path):
     names = list(CORRUPTIONS)
     x = np.arange(len(names))
-    width = 0.36
-    fig, axes = plt.subplots(1, 2, figsize=(9.2, 3.5))
+    width = 0.25
+    fig, axes = plt.subplots(1, 2, figsize=(9.4, 3.6))
     for ax, key, title, ylim in (
         (axes[0], "accuracy", "Accuracy under corruption", (0, 1)),
         (axes[1], "entropy", "Mean predictive entropy", None),
     ):
-        for offset, kind in ((-width / 2, "map"), (width / 2, "vbll")):
+        for i, kind in enumerate(("map", "vbll", "gvbll")):
             means, stds = [], []
             for name in names:
                 mean, std = _mean_std(
@@ -95,7 +107,7 @@ def plot_corruptions(rows, output_dir: Path):
                 means.append(mean)
                 stds.append(std)
             ax.bar(
-                x + offset,
+                x + (i - 1) * width,
                 means,
                 width=width,
                 yerr=stds,

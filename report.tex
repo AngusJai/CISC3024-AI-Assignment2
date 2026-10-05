@@ -58,7 +58,9 @@ Clothing Image Classification}
 On Fashion-MNIST it matches softmax MAP on accuracy, likelihood, and on which errors it ranks as uncertain.
 Its calibration error is lower than an unscaled softmax, but one temperature fit on the validation set calibrates the softmax further.
 Gaussian naive Bayes on pixels fails; linear discriminant analysis on the same CNN features is close in accuracy and worse as a probability model.
-The learned weight variance stays far below the prior, so the posterior predictive stays close to a point estimate, and neither head detects low-contrast shift.
+The learned weight variance stays far below the prior, so that discriminative posterior stays close to a point estimate.
+The generative VBLL from the same paper, which applies Bayes' rule to class-conditional Gaussians on the features, is the head that separates MNIST from clothes.
+Neither head detects low-contrast shift, and refusing low-confidence predictions does not repair rotation.
 Search, implementation, experiments, and this report were done by a Cursor agent under a standing instruction that I would not hand-write code.
 \end{abstract}
 
@@ -153,6 +155,19 @@ A softmax MAP baseline uses the same features and the same likelihood, but one w
 Gaussian naive Bayes and linear discriminant analysis, used later as controls, are the generative version of this story: they put Gaussians on $\phi$ or on the pixels and apply Bayes' rule for $p(y\mid x)$.
 D-VBLL is the discriminative version. It never builds $p(x\mid y)$.
 
+\paragraph{Generative VBLL}
+The same paper also specifies a generative classifier.
+Class $k$ owns a Gaussian mean $\mu_k$ in feature space, with prior $\mathcal{N}(0, s^{2}I)$ and variational posterior $\mathcal{N}(\bar\mu_k,\mathrm{diag}(v_k))$.
+A shared diagonal noise covariance $\Sigma$ gives the marginal
+$p(\phi\mid k)=\mathcal{N}(\bar\mu_k,\Sigma+\mathrm{diag}(v_k))$.
+With a uniform class prior, which is exact on this balanced training split, Bayes' rule is a softmax of those log densities:
+\begin{equation}
+p(y\mid\phi)=\mathrm{softmax}_y\big(\log p(\phi\mid y)\big).
+\label{eq:gvbll}
+\end{equation}
+Theorem~3 trains this model with a sampling-free bound. The predictive distribution is closed form, so there is no Monte Carlo step.
+I call this head G-VBLL. It is the deep analogue of the LDA control.
+
 \begin{figure}[H]
 \centering
 \safeimg[0.98\linewidth]{architecture.png}
@@ -165,12 +180,13 @@ The Cursor agent wrote the repository.
 I did not hand-write or hand-edit the Python.
 The layout is:
 \begin{itemize}
-  \item \texttt{models/vbll.py} --- diagonal D-VBLL: Theorem~2 bound, closed-form KL, noise penalty, and Monte Carlo predictive probabilities.
+  \item \texttt{models/vbll.py} --- diagonal D-VBLL (Theorem~2, Monte Carlo softmax) and G-VBLL (Theorem~3, closed-form Bayes rule).
   \item \texttt{models/backbone.py} --- shared CNN. Three conv stages, batch-norm, global average pool, 128-d features. About $1.58\times 10^{5}$ parameters.
-  \item \texttt{models/classifier.py} --- \texttt{map} (cross-entropy) or \texttt{vbll} (ELBO). Weight decay applies to the backbone only when the head is Bayesian.
+  \item \texttt{models/classifier.py} --- \texttt{map}, \texttt{vbll}, or \texttt{gvbll}. Weight decay applies to the backbone only when the head is Bayesian.
   \item \texttt{data\_utils.py} --- Fashion-MNIST / MNIST tensors, shared augmentation, pixel-space corruptions.
   \item \texttt{train.py}, \texttt{evaluate.py}, \texttt{metrics.py}, \texttt{figures.py}.
-  \item \texttt{run\_all.py}, \texttt{run\_ablation.py}, \texttt{extra\_analysis.py}. The last script does not retrain.
+  \item \texttt{run\_all.py}, \texttt{run\_ablation.py}, \texttt{run\_upgrades.py}.
+  \item \texttt{extra\_analysis.py}, \texttt{upgrade\_analysis.py}. Neither script retrains a finished checkpoint.
 \end{itemize}
 The training step, in the form that \texttt{self\_check()} tests, is:
 \begin{quote}
@@ -199,29 +215,31 @@ MNIST digits are a far out-of-distribution set~\cite{lecun1998gradient}: same re
 Both datasets are normalized with the Fashion-MNIST training mean $0.286$ and standard deviation $0.353$.
 
 \paragraph{Protocol}
-Both models share the CNN, the augmentation (horizontal flip and a random crop after 2-pixel padding), AdamW at learning rate $10^{-3}$, cosine decay, batch size 128, and 12 epochs.
+The three heads share the CNN, the augmentation (horizontal flip and a random crop after 2-pixel padding), AdamW at learning rate $10^{-3}$, cosine decay, batch size 128, and 12 epochs.
 Backbone weight decay is $10^{-4}$.
-Runs use two seeds, $\{0,1\}$, on Apple MPS (PyTorch 2.14).
+MAP and D-VBLL use seeds $\{0,1,2\}$. G-VBLL uses seeds $\{0,1\}$. All runs are on Apple MPS (PyTorch 2.14).
 Validation probabilities for D-VBLL use 16 logit samples; the test tables use 32.
-Reported means are over the two seeds.
+MAP and D-VBLL means are over three seeds. G-VBLL means are over two.
 Calibration is expected calibration error with 15 bins~\cite{guo2017calibration}.
 
 \begin{table}[H]
 \centering
-\caption{Clean Fashion-MNIST test set. Mean over two seeds.}
+\caption{Clean Fashion-MNIST test set. MAP and D-VBLL are means over three seeds; G-VBLL over two.}
 \label{tab:clean}
 \begin{tabular}{lcccc}
 \toprule
 Model & Accuracy & NLL & ECE & Entropy \\
 \midrule
-Softmax MAP & 0.930 & 0.200 & 0.0109 & 0.168 \\
-D-VBLL ($1/T$) & 0.928 & 0.200 & 0.0075 & 0.183 \\
+Softmax MAP & 0.931 & 0.199 & 0.0104 & 0.167 \\
+D-VBLL ($1/T$) & 0.928 & 0.201 & 0.0074 & 0.183 \\
+G-VBLL & 0.928 & 0.206 & 0.0131 & 0.252 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-On clean clothes the two models are tied on accuracy and likelihood.
-D-VBLL's ECE is lower on both seeds (MAP $0.0101$ and $0.0116$; D-VBLL $0.0075$ and $0.0076$).
+On clean clothes the three heads are tied on accuracy.
+D-VBLL's ECE stays near $0.007$ on every seed, below MAP.
+G-VBLL is slightly worse on NLL and ECE and has higher entropy, which is the price of the wider class-conditional Gaussians.
 The absolute gap is small because the MAP model is already well calibrated.
 Figure~\ref{fig:curves} shows the shared learning curve.
 Figure~\ref{fig:rel} shows that D-VBLL's reliability curve sits closer to the diagonal through the middle bins.
@@ -229,7 +247,7 @@ Figure~\ref{fig:rel} shows that D-VBLL's reliability curve sits closer to the di
 \begin{figure}[H]
 \centering
 \safeimg[0.95\linewidth]{curves.png}
-\caption{Validation accuracy and NLL. Bands are the two seeds. The training losses are not plotted together because cross-entropy and the ELBO are different objectives.}
+\caption{Validation accuracy and NLL for MAP and D-VBLL. Bands are three seeds. The training losses are not plotted together because cross-entropy and the ELBO are different objectives.}
 \label{fig:curves}
 \end{figure}
 
@@ -246,8 +264,8 @@ Three controls use the same test set and do not change the trained CNN.
 
 Temperature scaling~\cite{guo2017calibration} divides the MAP logits by a scalar $T$ fit on the 6{,}000 validation images by minimizing NLL.
 It does not change the predicted class.
-On the two seeds, $T$ is $1.114$ and $1.088$.
-Test ECE falls to $0.0050$ and $0.0067$ (mean $0.0059$), below D-VBLL's $0.0075$, and NLL is $0.198$ and $0.199$.
+On the three MAP seeds, $T$ is $1.114$, $1.088$, and $1.119$.
+Test ECE falls to a mean of $0.0054$, below D-VBLL's $0.0074$, and mean NLL is $0.197$.
 The ECE gap in Table~\ref{tab:clean} is therefore mostly a temperature, which matches the later finding that $q(W)$ has concentrated.
 
 Gaussian naive Bayes on raw pixels, with an independent Gaussian per pixel and per class, reaches accuracy $0.579$, NLL $7.63$, and ECE $0.419$.
@@ -258,26 +276,28 @@ The CNN features carry the class.
 The softmax and D-VBLL heads are what make the probabilities sharp.
 
 Ranking is a separate question from calibration.
-Using confidence to detect the model's own mistakes, AUROC is $0.922$ and $0.924$ for MAP and $0.923$ and $0.926$ for D-VBLL.
-Keeping the most confident $90\%$ of the test set raises accuracy from about $0.930$ to $0.968$ (MAP) and $0.967$ (D-VBLL).
+Using confidence to detect the model's own mistakes, mean AUROC is $0.922$ for MAP, $0.924$ for D-VBLL, and $0.922$ for G-VBLL.
+Pixel naive Bayes is at chance on this ranking ($0.510$); LDA on the CNN features reaches $0.900$.
+Keeping the most confident $90\%$ of the clean test set raises accuracy to $0.968$ (MAP), $0.967$ (D-VBLL), and $0.967$ (G-VBLL).
 Figure~\ref{fig:risk} shows the risk-coverage curves lying on top of each other.
 D-VBLL does not rank errors better than softmax once the posterior has collapsed.
 Both heads are still useful as reject options: the bottom decile of confidence contains a disproportionate share of the mistakes.
 
 \begin{table}[H]
 \centering
-\caption{Clean Fashion-MNIST test. Classical Bayes and temperature scaling are controls, not extra neural nets. Means over two seeds where two runs exist; LDA and pixel naive Bayes are single fits.}
+\caption{Clean test controls. Neural rows are means over the runs in Table~\ref{tab:clean}. Temperature is fit once per MAP seed. Naive Bayes and LDA are single fits. Brier is the mean squared error of the probability vector.}
 \label{tab:controls}
 \small
-\begin{tabular}{lcccc}
+\begin{tabular}{lccccc}
 \toprule
-Model & Accuracy & NLL & ECE & Error AUROC \\
+Model & Accuracy & NLL & ECE & Brier & Error AUROC \\
 \midrule
-Gaussian naive Bayes (pixels) & 0.579 & 7.630 & 0.419 & -- \\
-LDA on MAP features & 0.917 & 0.544 & 0.063 & -- \\
-Softmax MAP & 0.930 & 0.200 & 0.0109 & 0.923 \\
-MAP $+$ temperature & 0.930 & 0.199 & 0.0059 & 0.923 \\
-D-VBLL ($1/T$) & 0.928 & 0.200 & 0.0075 & 0.924 \\
+Gaussian naive Bayes (pixels) & 0.579 & 7.630 & 0.419 & 0.840 & 0.510 \\
+LDA on MAP features & 0.917 & 0.544 & 0.063 & 0.143 & 0.900 \\
+Softmax MAP & 0.931 & 0.199 & 0.0104 & 0.103 & 0.922 \\
+MAP $+$ temperature & 0.931 & 0.197 & 0.0054 & 0.103 & 0.922 \\
+D-VBLL ($1/T$) & 0.928 & 0.201 & 0.0074 & 0.105 & 0.924 \\
+G-VBLL & 0.928 & 0.206 & 0.0131 & 0.107 & 0.922 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -314,27 +334,27 @@ Figure~\ref{fig:gallery} shows the failure mode the ECE number hides: a few erro
 \paragraph{Corruptions}
 Corruptions are applied in pixel space at test time only.
 The models were not trained on them.
-Table~\ref{tab:corr} and Figure~\ref{fig:corr} show that geometric and photometric shift hurts both heads.
+Table~\ref{tab:corr} and Figure~\ref{fig:corr} show that geometric and photometric shift hurts all three heads.
 At noise $0.30$, rotation $60^{\circ}$, and low contrast, accuracy falls to roughly $0.12$--$0.23$.
 Low contrast is the instructive case: accuracy is about $0.19$--$0.23$, but mean entropy stays near $0.33$, lower than under noise, and ECE exceeds $0.65$.
-Both models are confidently wrong when the silhouette is preserved and the intensity is flattened.
+All three heads are confidently wrong when the silhouette is preserved and the intensity is flattened.
 Last-layer weight uncertainty is not a corruption detector.
 
 \begin{table}[H]
 \centering
-\caption{Test accuracy under corruption. Mean over two seeds.}
+\caption{Test accuracy under corruption. MAP and D-VBLL are means over three seeds; G-VBLL over two.}
 \label{tab:corr}
-\begin{tabular}{lcc}
+\begin{tabular}{lccc}
 \toprule
-Condition & Softmax MAP & D-VBLL \\
+Condition & MAP & D-VBLL & G-VBLL \\
 \midrule
-Clean & 0.930 & 0.928 \\
-Gaussian noise $0.15$ & 0.422 & 0.373 \\
-Gaussian noise $0.30$ & 0.145 & 0.180 \\
-Rotate $30^{\circ}$ & 0.276 & 0.287 \\
-Rotate $60^{\circ}$ & 0.121 & 0.117 \\
-$5\times 5$ average blur & 0.409 & 0.430 \\
-Low contrast & 0.193 & 0.235 \\
+Clean & 0.931 & 0.928 & 0.928 \\
+Gaussian noise $0.15$ & 0.423 & 0.418 & 0.412 \\
+Gaussian noise $0.30$ & 0.154 & 0.195 & 0.141 \\
+Rotate $30^{\circ}$ & 0.264 & 0.303 & 0.322 \\
+Rotate $60^{\circ}$ & 0.118 & 0.118 & 0.118 \\
+$5\times 5$ average blur & 0.397 & 0.423 & 0.466 \\
+Low contrast & 0.178 & 0.237 & 0.123 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -342,19 +362,21 @@ Low contrast & 0.193 & 0.235 \\
 \begin{figure}[H]
 \centering
 \safeimg[0.98\linewidth]{corruption_bars.png}
-\caption{Accuracy falls under every corruption. Entropy rises under noise and rotation, but stays low under low contrast, where both models are confidently wrong.}
+\caption{Accuracy falls under every corruption for all three heads. Entropy rises under noise and rotation, but stays low under low contrast.}
 \label{fig:corr}
 \end{figure}
 
 \paragraph{Out-of-distribution digits}
-Using maximum predictive probability as the in-distribution score, AUROC against MNIST is $0.902$ and $0.808$ for the two MAP seeds (mean $0.855$), and $0.825$ and $0.855$ for D-VBLL (mean $0.840$).
-The seed spread is larger than the gap between models, so I do not claim an OOD win for either head.
-Figure~\ref{fig:ood} shows why the AUROC is only moderate: most clothes sit near probability 1, and a visible slice of digits does too.
+Using maximum predictive probability as the in-distribution score, mean AUROC against MNIST is $0.851$ for MAP (standard deviation $0.039$ across three seeds) and $0.856$ for D-VBLL (standard deviation $0.026$).
+The third seed removes the apparent gap between those two heads.
+G-VBLL reaches $0.910$ on both of its seeds (standard deviation $0.003$).
+Figure~\ref{fig:ood} is a cumulative plot so the mass near probability 1 does not hide the rest of the distribution.
+G-VBLL's MNIST curve rises earlier: more digits receive a lower maximum probability, which is what the AUROC is measuring.
 
 \begin{figure}[H]
 \centering
-\safeimg[0.95\linewidth]{ood_hist.png}
-\caption{Maximum predictive probability, seed 0. MNIST is shifted left of Fashion-MNIST, but both distributions have a spike at 1.}
+\safeimg[0.98\linewidth]{ood_cdf.png}
+\caption{Cumulative distribution of maximum predictive probability, seed 0. A curve that rises earlier is less confident. G-VBLL separates MNIST from Fashion-MNIST more cleanly.}
 \label{fig:ood}
 \end{figure}
 
@@ -373,29 +395,27 @@ This is the opposite of a distance-aware uncertainty method, and it matches the 
 \label{fig:norm}
 \end{figure}
 
-\paragraph{KL-weight ablation (seed 0)}
+\paragraph{KL-weight ablation}
 The $1/T$ factor is a hyperparameter of the ELBO estimator, not a constant of nature.
-I retrained D-VBLL at $10/T$ and $100/T$ with the same seed and schedule.
-Table~\ref{tab:kl} shows the trade.
-Stronger KL pulls $q(W)$ toward the prior.
-Mean weight variance goes from $4.9\times 10^{-4}$ at $1/T$ to $4.7\times 10^{-3}$ at $10/T$ and $8.1\times 10^{-3}$ at $100/T$, against a prior variance of $0.0156$.
-The KL value falls from about $2.3\times 10^{3}$ to $229$, and predictive entropy rises from $0.187$ to $0.639$.
-Clean accuracy stays at $0.927$--$0.929$ across all three settings.
-What changes is the shape of the predictive distribution: clean NLL and ECE get worse, because these test images want sharp probabilities, while MNIST AUROC on this seed rises from $0.825$ to $0.916$.
-$1/T$, the setting in the main table, is the best calibrated of the three.
-The ablation shows that the KL term is alive: it trades clean calibration for broader uncertainty, without a collapse in accuracy at this model size.
+D-VBLL was retrained at $10/T$ and $100/T$ for seeds 0 and 1.
+Table~\ref{tab:kl} reports means.
+A single seed had made $10/T$ look like an OOD improvement ($0.869$ versus $0.825$).
+The second seed removes that claim: mean AUROC at $10/T$ is $0.844$, which does not beat $1/T$ ($0.856$).
+$100/T$ does raise mean AUROC to $0.913$, and it also raises ECE to $0.094$ and NLL to $0.288$.
+Accuracy stays at $0.927$--$0.928$.
+The KL term is alive. A moderate increase does not buy out-of-distribution detection, and a large increase buys it by making the predictive distribution less sharp on the clean test set.
 
 \begin{table}[H]
 \centering
-\caption{D-VBLL KL multiplier, seed 0, clean test unless noted. Weight variance is the mean diagonal entry of $q(W)$.}
+\caption{D-VBLL KL multiplier. $1/T$ is the mean of three seeds. $10/T$ and $100/T$ are means of seeds 0 and 1.}
 \label{tab:kl}
 \begin{tabular}{lccccc}
 \toprule
 KL weight & Accuracy & NLL & ECE & Entropy & MNIST AUROC \\
 \midrule
-$1/T$ & 0.929 & 0.201 & 0.0075 & 0.187 & 0.825 \\
-$10/T$ & 0.927 & 0.212 & 0.0154 & 0.280 & 0.869 \\
-$100/T$ & 0.927 & 0.289 & 0.0937 & 0.639 & 0.916 \\
+$1/T$ & 0.928 & 0.201 & 0.0074 & 0.183 & 0.856 \\
+$10/T$ & 0.928 & 0.211 & 0.0160 & 0.277 & 0.844 \\
+$100/T$ & 0.927 & 0.288 & 0.0938 & 0.637 & 0.913 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -403,32 +423,85 @@ $100/T$ & 0.927 & 0.289 & 0.0937 & 0.639 & 0.916 \\
 \begin{figure}[H]
 \centering
 \safeimg[0.95\linewidth]{kl_ablation.png}
-\caption{Seed-0 ablation of the KL multiplier. $1/T$ is the main setting.}
+\caption{Seed-0 ablation of the KL multiplier. $1/T$ is the main setting. Table~\ref{tab:kl} is the multi-seed version of the same sweep.}
 \label{fig:kl}
+\end{figure}
+
+\paragraph{Prior scale does not uncollapse the posterior}
+The prior variance is $\mathrm{prior\_scale}\times 2/D$.
+I retrained seed-0 D-VBLL at scales $0.1$, $1$, and $10$, so the prior variance runs from $0.0016$ to $0.156$.
+Mean posterior variance stays between $2.5\times 10^{-4}$ and $5.4\times 10^{-4}$ in all three runs.
+Widening the prior does not restore the uncertainty the KL term at $1/T$ is too weak to protect.
+Entropy and MNIST AUROC both fall as the prior widens: AUROC is $0.883$, $0.825$, and $0.791$.
+The KL multiplier, not the prior scale, is the knob that moved the predictive distribution.
+
+\begin{table}[H]
+\centering
+\caption{D-VBLL prior scale, seed 0, KL weight $1/T$.}
+\label{tab:prior}
+\begin{tabular}{lccccc}
+\toprule
+Scale & Accuracy & NLL & ECE & Entropy & MNIST AUROC \\
+\midrule
+$0.1$ & 0.928 & 0.204 & 0.0064 & 0.219 & 0.883 \\
+$1$ & 0.929 & 0.201 & 0.0075 & 0.187 & 0.825 \\
+$10$ & 0.930 & 0.203 & 0.0089 & 0.178 & 0.791 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Monte Carlo sample size}
+D-VBLL predictions average softmaxes.
+On the three seeds, 8, 32, and 64 samples agree to about $0.001$ in accuracy and NLL, and ECE stays inside $0.007$--$0.008$.
+The published tables use 32 samples. Eight would have been enough on this dataset.
+
+\paragraph{Shirt versus T-shirt}
+Headline ECE near $0.01$ is an average over easy classes.
+On shirt images alone, accuracy is $0.776$ (MAP), $0.767$ (D-VBLL), and $0.760$ (G-VBLL), and the class-conditional ECE is about $0.074$, $0.075$, and $0.049$.
+About $10\%$ of shirts are predicted as T-shirts under every head.
+G-VBLL is less confident on shirts (mean confidence $0.79$ against $0.84$ for MAP), which is why its shirt ECE is lower, not because it names them more often.
+The overlap is in the labels and the silhouette.
+
+\paragraph{Rejection under shift}
+Dropping the least confident $10\%$ helps on clean images and does not help once the input is shifted.
+At $60^{\circ}$ rotation, accuracy among the kept $90\%$ is $0.122$--$0.123$ for all three heads, against a full-set accuracy of $0.118$.
+Under low contrast the kept slice is $0.174$ (MAP), $0.241$ (D-VBLL), and $0.119$ (G-VBLL), against full-set accuracies of $0.178$, $0.237$, and $0.123$.
+Figure~\ref{fig:sel} is that comparison.
+Confidence is a reject option when the test distribution matches training. It is not a detector for a preserved silhouette with the wrong intensity or the wrong angle.
+
+\begin{figure}[H]
+\centering
+\safeimg[0.85\linewidth]{selective_corruption.png}
+\caption{Accuracy after keeping the most confident $90\%$. The gain exists on clean clothes and disappears under $60^{\circ}$ rotation and low contrast.}
+\label{fig:sel}
 \end{figure}
 
 \section{What I Have Learnt from This AI Assignment}
 \begin{itemize}
   \item The useful constraint was the brief itself: probability or Bayes, recent, and not a repeat of FasterNet. Once that was stated, the agent could reject a fast CNN and look for a last-layer posterior with a checkable formula.
   \item A Bayesian classifier is defined by the predictive distribution, not by the word ``uncertainty'' in the README. Here that distribution is an average of softmaxes under $q(W)$. The self-check on Equation~\eqref{eq:bound} mattered more than the first epoch's accuracy.
-  \item Matching accuracy is a real result, and it is not the whole probability question. D-VBLL at $1/T$ ties MAP on accuracy, NLL, and error ranking. The ECE edge over unscaled softmax disappears once the softmax has a validation temperature. I should not describe D-VBLL as a better calibrated classifier than temperature scaling.
-  \item Posterior variance can collapse. The prior said $0.016$; training at $1/T$ produced about $5\times 10^{-4}$. After that, sampling the last layer cannot invent distance-aware uncertainty. Raising the KL weight reverses the collapse: entropy and MNIST AUROC go up, clean ECE gets worse, and accuracy on this CNN barely moves.
+  \item Matching accuracy is a real result, and it is not the whole probability question. D-VBLL at $1/T$ ties MAP on accuracy, NLL, Brier score, and error ranking. The ECE edge over unscaled softmax disappears once the softmax has a validation temperature. I should not describe D-VBLL as a better calibrated classifier than temperature scaling.
+  \item Posterior variance can collapse, and widening the prior does not undo it. The prior said $0.016$ at the default scale; training at $1/T$ kept the posterior variance below $6\times 10^{-4}$ even when that prior was widened or narrowed by a factor of ten. A second seed also removed a false OOD win for the $10/T$ KL weight. Only $100/T$ raises MNIST AUROC, and it does so by making clean probabilities less sharp.
   \item A Bayes classifier still needs a representation. Pixel naive Bayes scores $0.579$ because garment pixels are not independent Gaussians. LDA on the CNN features jumps to $0.917$, and the discriminative heads then cut NLL from $0.544$ to $0.200$. The modern part is the feature map; the last-layer posterior is a small adjustment on top.
-  \item Confidence is not a corruption alarm, but it is a reject option on clean data. Low contrast keeps the garment shape, both models stay confident, and ECE exceeds $0.65$. On clean test images, dropping the least confident $10\%$ lifts accuracy to about $0.967$ for both heads. Shirt versus T-shirt is a label-overlap problem, not a Bayes problem.
-  \item Out-of-distribution AUROC needs more than one seed. MAP's two seeds differed by about nine points. A single-run bar chart would have picked a winner that the second seed does not support.
+  \item The generative head is the one that uses Bayes' rule, and it is the one that moves out-of-distribution detection. G-VBLL's MNIST AUROC is $0.910$ with almost no seed spread. It pays for that with a higher clean NLL and ECE than D-VBLL. LDA on the same style of model, shared covariance on frozen features, reaches accuracy $0.917$ and then loses on NLL. The formula and the representation both matter.
+  \item Confidence is a reject option only on the training distribution. Dropping the least confident $10\%$ lifts clean accuracy to about $0.967$ and does nothing under $60^{\circ}$ rotation or low contrast. Shirt ECE stays near $0.07$ while the headline ECE is near $0.01$. Eight Monte Carlo samples match sixty-four on this test set.
+  \item Out-of-distribution AUROC needs more than one seed. MAP's three seeds still spread by about nine points. G-VBLL's two seeds differ by $0.003$. A single-run bar chart would have picked a winner that the next seed does not support.
 \end{itemize}
 
 \section{Source Code Webpage Link}
 Source code:\\[0.3em]
 \url{https://github.com/AngusJai/CISC3024-AI-Assignment2}\\[0.3em]
-{\small The repository contains \texttt{models/}, \texttt{train.py}, \texttt{evaluate.py}, \texttt{run\_all.py}, \texttt{run\_ablation.py}, \texttt{process\_log.md}, \texttt{report.tex}, and the metrics and figures under \texttt{outputs/}. Dataset downloads (\texttt{data/}) and virtual environments are gitignored. Trained checkpoints for the main seeds are included so \texttt{demo.py} can be run without retraining.}
+The repository contains the model code, the training and evaluation scripts, \texttt{process\_log.md}, \texttt{report.tex}, and the metrics and figures under \texttt{outputs/}.
+Dataset downloads and virtual environments are gitignored.
+Trained checkpoints are included so \texttt{demo.py} can be run without retraining.
 
 \section{Conclusion}
 D-VBLL is a recent Bayesian classifier that an agent can implement from a variational bound and test on clothing images in one afternoon.
 With the paper's $1/T$ KL weight it reproduces the softmax baseline's accuracy and slightly improves unscaled calibration.
 A validation temperature on that softmax calibrates further, and a classical LDA head on the same features is close in accuracy but worse in NLL.
-D-VBLL does not automatically detect digit images or low-contrast clothes, because the approximate posterior concentrates and the predictive distribution collapses toward the mean network.
-The KL ablation makes that statement empirical: turn the KL up and entropy and digit-detection AUROC rise, while clean calibration falls. Accuracy on this network stays near $0.93$.
+D-VBLL does not detect digit images, because the approximate posterior concentrates. Widening the prior leaves that concentration in place. Only a much larger KL weight raises MNIST AUROC, and it does so by hurting clean NLL and ECE.
+G-VBLL, the generative classifier in the same paper, is the head that applies Bayes' rule to the features. Its MNIST AUROC is $0.910$ and stable across seeds, with a small cost in clean likelihood and calibration.
+Refusing the least confident tenth of the test set helps only when the images still look like the training set. Accuracy on this network stays near $0.93$.
 
 \begin{thebibliography}{9}
 \bibitem{harrison2024vbll}
