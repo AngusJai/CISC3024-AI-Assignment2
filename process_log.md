@@ -61,6 +61,15 @@ KL ablation, seed 0:
 
 Shirt is the weak class (about 0.77). The main confusions are shirt / T-shirt / coat.
 
+## Controls added after the first full runs
+
+`python extra_analysis.py` does not retrain the CNNs.
+
+- Temperature scaling on the MAP validation logits: $T = 1.114$ and $1.088$. Test ECE $0.0050$ and $0.0067$, below D-VBLL. The ECE win over raw softmax is mostly a temperature.
+- Gaussian naive Bayes on pixels: accuracy $0.579$, NLL $7.63$.
+- Shrinkage LDA on seed-0 MAP features: accuracy $0.917$, NLL $0.544$, ECE $0.063$.
+- Misclassification AUROC about $0.923$ for both heads. Accuracy at $90\%$ coverage about $0.968$ (MAP) and $0.967$ (D-VBLL). Risk-coverage curves overlap.
+
 ## Report
 
 `report.tex` is compiled to `AIAssignment2_Report.pdf`. It uses the six sections required by the brief.

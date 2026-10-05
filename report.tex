@@ -54,9 +54,11 @@ Clothing Image Classification}
 \thispagestyle{fancy}
 
 \begin{abstract}
-\textbf{Thesis:} a discriminative variational Bayesian last layer (D-VBLL; Harrison, Willes, and Snoek, ICLR 2024) turns the final linear classifier into a Gaussian posterior over weights.
-On Fashion-MNIST, with a shared small CNN, D-VBLL matches a softmax MAP baseline on accuracy and negative log-likelihood and lowers expected calibration error.
-The same posterior does not by itself detect MNIST digits as out-of-distribution, and neither model notices low-contrast shift, because the learned weight variance stays far below the prior and the predictive distribution stays close to a point-estimate softmax.
+\textbf{Thesis:} a discriminative variational Bayesian last layer (D-VBLL; Harrison, Willes, and Snoek, ICLR 2024) puts a Gaussian posterior on the last-layer weights of a clothing classifier.
+On Fashion-MNIST it matches softmax MAP on accuracy, likelihood, and on which errors it ranks as uncertain.
+Its calibration error is lower than an unscaled softmax, but one temperature fit on the validation set calibrates the softmax further.
+Gaussian naive Bayes on pixels fails; linear discriminant analysis on the same CNN features is close in accuracy and worse as a probability model.
+The learned weight variance stays far below the prior, so the posterior predictive stays close to a point estimate, and neither head detects low-contrast shift.
 Search, implementation, experiments, and this report were done by a Cursor agent under a standing instruction that I would not hand-write code.
 \end{abstract}
 
@@ -72,10 +74,29 @@ The agent searched recent Bayesian deep-learning papers and kept three candidate
   \item \textbf{FSP-Laplace} (Cinquin et al., NeurIPS 2024), a Laplace approximation with a function-space Gaussian-process prior.
   \item \textbf{Last Layer Empirical Bayes} (Villecroze et al., 2025), a normalizing-flow prior on the last layer.
 \end{itemize}
-The search settled on D-VBLL, the discriminative classifier in that ICLR paper.
-The training objective is a closed-form lower bound (their Theorem~2), so the agent can check the formula on a toy batch before any long run.
-FSP-Laplace needs function-space machinery that is hard to verify on a laptop, and the empirical-Bayes flow adds another approximate model on top of the classifier.
-The application is clothing recognition on Fashion-MNIST, which is a different task from the digit robustness study in Assignment~1.
+The choice was a table, not a preference for the newest title.
+D-VBLL is the only one of the three whose training loss is a closed form I can check on a toy batch before spending a training run.
+FSP-Laplace needs a function-space mode and a matrix-free Hessian.
+Last-layer empirical Bayes adds a normalizing flow on top of the classifier.
+Fashion-MNIST clothing recognition is also a different task from the digit-robustness study in Assignment~1.
+
+\begin{table}[H]
+\centering
+\caption{Candidates considered for a recent Bayes classifier that a laptop run can verify.}
+\label{tab:choice}
+\small
+\begin{tabular}{lccc}
+\toprule
+ & D-VBLL & FSP-Laplace & LLEB \\
+\midrule
+Venue & ICLR 2024 & NeurIPS 2024 & 2025 \\
+Object with a posterior & last-layer $W$ & network function & last-layer flow \\
+Check before training & Theorem~2 & weak mode, Hessian & ELBO through a flow \\
+Extra machinery & diagonal Gaussian & function-space GP & normalizing flow \\
+Used in this report & yes & no & no \\
+\bottomrule
+\end{tabular}
+\end{table}
 The diary of prompts, rejected alternatives, and checks is \texttt{process\_log.md}.
 
 \section{Algorithm Description}
@@ -123,9 +144,14 @@ Test metrics use 32 samples.
 Out-of-distribution scores use the maximum predictive probability~\cite{hendrycks2017baseline}.
 
 \paragraph{What is Bayesian here.}
-The quantity being inferred is the last-layer weight, not the image class alone.
-The class probability reported at test time is a marginal probability: uncertainty in $W$ is integrated out.
-A softmax MAP baseline uses the same features but a single point $W$.
+Write the four objects separately, because a pattern-recognition classifier is the posterior predictive, not the training loss.
+The prior is $p(W)=\prod_k\mathcal{N}(w_k;0,s^{2}I)$.
+The likelihood is the softmax in Equation~\eqref{eq:disc}.
+The variational posterior $q(W)$ stands in for $p(W\mid\mathrm{data})$, and the KL term keeps it from ignoring the prior.
+The reported class probability is the posterior predictive $\mathbb{E}_{q(W)}[\mathrm{softmax}(W\phi)]$, not a point $W$.
+A softmax MAP baseline uses the same features and the same likelihood, but one weight matrix.
+Gaussian naive Bayes and linear discriminant analysis, used later as controls, are the generative version of this story: they put Gaussians on $\phi$ or on the pixels and apply Bayes' rule for $p(y\mid x)$.
+D-VBLL is the discriminative version. It never builds $p(x\mid y)$.
 
 \begin{figure}[H]
 \centering
@@ -143,8 +169,17 @@ The layout is:
   \item \texttt{models/backbone.py} --- shared CNN. Three conv stages, batch-norm, global average pool, 128-d features. About $1.58\times 10^{5}$ parameters.
   \item \texttt{models/classifier.py} --- \texttt{map} (cross-entropy) or \texttt{vbll} (ELBO). Weight decay applies to the backbone only when the head is Bayesian.
   \item \texttt{data\_utils.py} --- Fashion-MNIST / MNIST tensors, shared augmentation, pixel-space corruptions.
-  \item \texttt{train.py}, \texttt{evaluate.py}, \texttt{metrics.py}, \texttt{figures.py}, \texttt{run\_all.py}, \texttt{run\_ablation.py}.
+  \item \texttt{train.py}, \texttt{evaluate.py}, \texttt{metrics.py}, \texttt{figures.py}.
+  \item \texttt{run\_all.py}, \texttt{run\_ablation.py}, \texttt{extra\_analysis.py}. The last script does not retrain.
 \end{itemize}
+The training step, in the form that \texttt{self\_check()} tests, is:
+\begin{quote}
+\small
+$\phi \leftarrow \mathrm{backbone}(x)$.\\
+$\mu_k \leftarrow m_k^{\top}\phi$,\quad $v_k \leftarrow \phi^{\top}\mathrm{diag}(v_k)\phi+\sigma_k^{2}$.\\
+$\mathrm{bound} \leftarrow \mu_y - \log\sum_k\exp(\mu_k+\tfrac12 v_k)$.\\
+$\mathrm{loss} \leftarrow -\mathrm{mean}(\mathrm{bound})+(1/T)\,\mathrm{KL}(q\|p)-(1/T)\,\log p(\sigma^{2})$.
+\end{quote}
 Before training, \texttt{self\_check()} builds an $8\times 4$ random batch and checks three facts: the loss is finite and back-propagates; the bound matches a hand-expanded log-sum-exp; multiplying the features by four increases logit variance.
 That check is the implementation test.
 It does not use Fashion-MNIST accuracy as a substitute for the formula.
@@ -203,6 +238,55 @@ Figure~\ref{fig:rel} shows that D-VBLL's reliability curve sits closer to the di
 \safeimg[0.62\linewidth]{reliability.png}
 \caption{Reliability diagram on the clean test set, seed 0. Both models are close to the diagonal; D-VBLL is the smoother of the two.}
 \label{fig:rel}
+\end{figure}
+
+\paragraph{Controls a probability model still has to pass.}
+A lower ECE than softmax is not, by itself, evidence that the posterior did the work.
+Three controls use the same test set and do not change the trained CNN.
+
+Temperature scaling~\cite{guo2017calibration} divides the MAP logits by a scalar $T$ fit on the 6{,}000 validation images by minimizing NLL.
+It does not change the predicted class.
+On the two seeds, $T$ is $1.114$ and $1.088$.
+Test ECE falls to $0.0050$ and $0.0067$ (mean $0.0059$), below D-VBLL's $0.0075$, and NLL is $0.198$ and $0.199$.
+The ECE gap in Table~\ref{tab:clean} is therefore mostly a temperature, which matches the later finding that $q(W)$ has concentrated.
+
+Gaussian naive Bayes on raw pixels, with an independent Gaussian per pixel and per class, reaches accuracy $0.579$, NLL $7.63$, and ECE $0.419$.
+The independence assumption does not describe a garment.
+Shrinkage linear discriminant analysis on the 128-d features of the seed-0 MAP network is the classical shared-covariance Bayes classifier on the same representation.
+It reaches accuracy $0.917$, close to the discriminative heads, but NLL $0.544$ and ECE $0.063$.
+The CNN features carry the class.
+The softmax and D-VBLL heads are what make the probabilities sharp.
+
+Ranking is a separate question from calibration.
+Using confidence to detect the model's own mistakes, AUROC is $0.922$ and $0.924$ for MAP and $0.923$ and $0.926$ for D-VBLL.
+Keeping the most confident $90\%$ of the test set raises accuracy from about $0.930$ to $0.968$ (MAP) and $0.967$ (D-VBLL).
+Figure~\ref{fig:risk} shows the risk-coverage curves lying on top of each other.
+D-VBLL does not rank errors better than softmax once the posterior has collapsed.
+Both heads are still useful as reject options: the bottom decile of confidence contains a disproportionate share of the mistakes.
+
+\begin{table}[H]
+\centering
+\caption{Clean Fashion-MNIST test. Classical Bayes and temperature scaling are controls, not extra neural nets. Means over two seeds where two runs exist; LDA and pixel naive Bayes are single fits.}
+\label{tab:controls}
+\small
+\begin{tabular}{lcccc}
+\toprule
+Model & Accuracy & NLL & ECE & Error AUROC \\
+\midrule
+Gaussian naive Bayes (pixels) & 0.579 & 7.630 & 0.419 & -- \\
+LDA on MAP features & 0.917 & 0.544 & 0.063 & -- \\
+Softmax MAP & 0.930 & 0.200 & 0.0109 & 0.923 \\
+MAP $+$ temperature & 0.930 & 0.199 & 0.0059 & 0.923 \\
+D-VBLL ($1/T$) & 0.928 & 0.200 & 0.0075 & 0.924 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\safeimg[0.62\linewidth]{risk_coverage.png}
+\caption{Selective risk against coverage, seed 0. Lower is better. The curves overlap: both heads become accurate once low-confidence predictions are refused.}
+\label{fig:risk}
 \end{figure}
 
 \paragraph{Where the errors are.}
@@ -327,9 +411,10 @@ $100/T$ & 0.927 & 0.289 & 0.0937 & 0.639 & 0.916 \\
 \begin{itemize}
   \item The useful constraint was the brief itself: probability or Bayes, recent, and not a repeat of FasterNet. Once that was stated, the agent could reject a fast CNN and look for a last-layer posterior with a checkable formula.
   \item A Bayesian classifier is defined by the predictive distribution, not by the word ``uncertainty'' in the README. Here that distribution is an average of softmaxes under $q(W)$. The self-check on Equation~\eqref{eq:bound} mattered more than the first epoch's accuracy.
-  \item Matching accuracy is a real result. On this CNN, D-VBLL at $1/T$ ties MAP on accuracy and NLL and wins only on ECE, by a small margin that shows up on both seeds. I should not describe that as a large robustness gain.
+  \item Matching accuracy is a real result, and it is not the whole probability question. D-VBLL at $1/T$ ties MAP on accuracy, NLL, and error ranking. The ECE edge over unscaled softmax disappears once the softmax has a validation temperature. I should not describe D-VBLL as a better calibrated classifier than temperature scaling.
   \item Posterior variance can collapse. The prior said $0.016$; training at $1/T$ produced about $5\times 10^{-4}$. After that, sampling the last layer cannot invent distance-aware uncertainty. Raising the KL weight reverses the collapse: entropy and MNIST AUROC go up, clean ECE gets worse, and accuracy on this CNN barely moves.
-  \item Confidence is not a corruption alarm. Low contrast keeps the garment shape, both models stay confident, and ECE exceeds $0.65$. Shirt versus T-shirt is a label-overlap problem, not a Bayes problem.
+  \item A Bayes classifier still needs a representation. Pixel naive Bayes scores $0.579$ because garment pixels are not independent Gaussians. LDA on the CNN features jumps to $0.917$, and the discriminative heads then cut NLL from $0.544$ to $0.200$. The modern part is the feature map; the last-layer posterior is a small adjustment on top.
+  \item Confidence is not a corruption alarm, but it is a reject option on clean data. Low contrast keeps the garment shape, both models stay confident, and ECE exceeds $0.65$. On clean test images, dropping the least confident $10\%$ lifts accuracy to about $0.967$ for both heads. Shirt versus T-shirt is a label-overlap problem, not a Bayes problem.
   \item Out-of-distribution AUROC needs more than one seed. MAP's two seeds differed by about nine points. A single-run bar chart would have picked a winner that the second seed does not support.
 \end{itemize}
 
@@ -340,8 +425,9 @@ Source code:\\[0.3em]
 
 \section{Conclusion}
 D-VBLL is a recent Bayesian classifier that an agent can implement from a variational bound and test on clothing images in one afternoon.
-With the paper's $1/T$ KL weight it reproduces the softmax baseline's accuracy and slightly improves calibration.
-It does not automatically detect digit images or low-contrast clothes, because the approximate posterior concentrates and the predictive distribution collapses toward the mean network.
+With the paper's $1/T$ KL weight it reproduces the softmax baseline's accuracy and slightly improves unscaled calibration.
+A validation temperature on that softmax calibrates further, and a classical LDA head on the same features is close in accuracy but worse in NLL.
+D-VBLL does not automatically detect digit images or low-contrast clothes, because the approximate posterior concentrates and the predictive distribution collapses toward the mean network.
 The KL ablation makes that statement empirical: turn the KL up and entropy and digit-detection AUROC rise, while clean calibration falls. Accuracy on this network stays near $0.93$.
 
 \begin{thebibliography}{9}

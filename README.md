@@ -36,6 +36,9 @@ python demo.py --ckpt outputs/vbll_seed0.pt
 | Model | Clean acc. | NLL | ECE |
 |-------|----------:|----:|----:|
 | Softmax MAP | 0.930 | 0.200 | 0.0109 |
+| MAP + validation temperature | 0.930 | 0.199 | 0.0059 |
 | D-VBLL, KL weight 1/T | 0.928 | 0.200 | 0.0075 |
+
+Pixel Gaussian naive Bayes reaches accuracy 0.579. Shrinkage LDA on the MAP features reaches 0.917 accuracy but NLL 0.544. `extra_analysis.py` reproduces the controls.
 
 Paper: Harrison, Willes, and Snoek, *Variational Bayesian Last Layers*, ICLR 2024.
